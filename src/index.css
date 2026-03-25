@@ -1,0 +1,111 @@
+@import "tailwindcss";
+
+@theme {
+  --color-tertiary-fixed-dim: #d0e8d9;
+  --color-surface-container: #F5F5F4;
+  --color-on-error-container: #6e0a12;
+  --color-surface-container-lowest: #ffffff;
+  --color-on-secondary-fixed: #503c1d;
+  --color-primary-container: #cef7b4;
+  --color-outline-variant: #E7E5E4;
+  --color-tertiary-fixed: #def7e7;
+  --color-surface-dim: #E7E5E4;
+  --color-secondary-container: #feddb3;
+  --color-surface-variant: #F5F5F4;
+  --color-on-primary: #ffffff;
+  --color-on-tertiary-fixed: #384c41;
+  --color-on-tertiary: #e7ffef;
+  --color-on-surface: #1C1917;
+  --color-surface-tint: #4d6f39;
+  --color-primary-fixed-dim: #b3d99a;
+  --color-tertiary-container: #def7e7;
+  --color-error-dim: #67040d;
+  --color-on-surface-variant: #78716C;
+  --color-on-tertiary-container: #4a5f53;
+  --color-primary: #4d6f39;
+  --color-secondary-dim: #664f2f;
+  --color-inverse-on-surface: #F5F5F4;
+  --color-primary-dim: #3e5a2d;
+  --color-secondary-fixed: #feddb3;
+  --color-on-error: #fff7f6;
+  --color-surface-container-highest: #D6D3D1;
+  --color-on-secondary-fixed-variant: #6f5836;
+  --color-on-tertiary-fixed-variant: #54695d;
+  --color-on-secondary: #fff8f2;
+  --color-surface-container-low: #FAFAF9;
+  --color-on-primary-fixed-variant: #365026;
+  --color-tertiary: #4e6458;
+  --color-secondary: #735b3a;
+  --color-on-primary-fixed: #132107;
+  --color-primary-fixed: #cef7b4;
+  --color-surface: #ffffff;
+  --color-error: #a83836;
+  --color-inverse-surface: #292524;
+  --color-on-primary-container: #132107;
+  --color-on-secondary-container: #644e2e;
+  --color-on-background: #1C1917;
+  --color-error-container: #fa746f;
+  --color-inverse-primary: #b3d99a;
+  --color-secondary-fixed-dim: #efd0a6;
+  --color-surface-container-high: #E7E5E4;
+  --color-outline: #A8A29E;
+  --color-surface-bright: #ffffff;
+  --color-background: #F5F5F4;
+  --color-tertiary-dim: #43584c;
+
+  --font-headline: "Noto Serif", serif;
+  --font-body: "Manrope", sans-serif;
+  --font-label: "Manrope", sans-serif;
+}
+
+@layer base {
+  body {
+    font-family: var(--font-body);
+    background-color: var(--color-background);
+    color: var(--color-on-background);
+    background-image: radial-gradient(var(--color-surface-container-highest) 1px, transparent 1px);
+    background-size: 24px 24px;
+  }
+
+  /* 🌙 PALETA DO MODO ESCURO (Tailwind v4) */
+  :root.dark, .dark {
+    --color-surface: #1c1917;
+    --color-surface-container-lowest: #0c0a09;
+    --color-surface-container-low: #171412;
+    --color-surface-container: #292524;
+    --color-surface-container-high: #44403c;
+    --color-surface-container-highest: #57534e;
+    --color-on-surface: #f5f5f4;
+    --color-on-surface-variant: #d6d3d1;
+    --color-outline: #a8a29e;
+    --color-outline-variant: #78716c;
+    --color-primary: #b3d99a;
+    --color-on-primary: #132107;
+    --color-primary-container: #365026;
+    --color-on-primary-container: #cef7b4;
+    --color-background: #1c1917;
+    --color-on-background: #f5f5f4;
+  }
+  
+  h1, h2, h3, h4, h5, h6, .font-serif {
+    font-family: var(--font-headline);
+  }
+}
+
+@layer utilities {
+  .material-symbols-outlined {
+    font-variation-settings: 'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 24;
+  }
+  .star-active {
+    font-variation-settings: 'FILL' 1;
+    color: var(--color-primary);
+  }
+}
+
+/* =========================================
+   ESTILIZAÇÃO DA BARRA DE ROLAGEM
+   ========================================= */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: var(--color-surface-container-low); border-radius: 10px; }
+::-webkit-scrollbar-thumb { background: var(--color-outline-variant); border-radius: 10px; }
+::-webkit-scrollbar-thumb:hover { background: var(--color-outline); }
