@@ -1,12 +1,13 @@
 import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { motion } from 'motion/react';
 import { Appointment, Employee } from '../types';
-import { AnamneseForm, AnamneseData, formatAnamnese, initialAnamnese } from './AnamneseForm';
-import { formatPhone } from '../utils/formatters';
-import { getDuration, getLocalTodayString, hasOverlap } from './appointmentUtils';
+import { getDuration, getLocalTodayString } from './appointmentUtils';
 import { SupervisorEquipeTab } from './SupervisorEquipeTab';
 import { UpcomingAppointmentsModal } from './UpcomingAppointmentsModal';
 import { BlockModal } from '../BlockModal';
+import { BookingModal } from '../BookingModal';
+import { EditAppointmentModal } from '../EditAppointmentModal';
+import { SCHEDULE_CONFIG } from '../config/scheduleConfig';
 
 
 const EmployeeScheduleColumn = React.memo(({
@@ -37,7 +38,7 @@ const EmployeeScheduleColumn = React.memo(({
   const empBlockers = (emp.bloqueios || []).filter((b: any) => b.data === receptionDate);
 
   return (
-    <div onClick={(e) => onGridClick(e, emp.id)} className="flex-1 min-w-[220px] border-r border-outline-variant/10 relative cursor-pointer hover:bg-primary/5 transition-colors" style={{ height: (END_HOUR - START_HOUR + 1) * HOUR_HEIGHT }}>
+    <div onClick={(e) => onGridClick(e, emp.id)} className="flex-1 min-w-[180px] md:min-w-[220px] border-r border-outline-variant/10 relative cursor-pointer hover:bg-primary/5 transition-colors" style={{ height: (END_HOUR - START_HOUR + 1) * HOUR_HEIGHT }}>
       {/* Rendereização dos Bloqueios */}
       {empBlockers.map((bloq: any) => {
         const [sH, sM] = bloq.horaInicio.split(':').map(Number);
@@ -155,16 +156,8 @@ export function SupervisorView({ employees, appointments, services, clients, onR
   const [scheduleSearchTerm, setScheduleSearchTerm] = useState('');
   const [showNewBookingModal, setShowNewBookingModal] = useState(false);
   const [showNewBlockModal, setShowNewBlockModal] = useState(false);
-  const [bookName, setBookName] = useState('');
-  const [bookPhone, setBookPhone] = useState('');
   const [bookTime, setBookTime] = useState('');
   const [bookEmp, setBookEmp] = useState('');
-  const [bookService, setBookService] = useState<string[]>([]);
-  const [bookDetails, setBookDetails] = useState('');
-  const [bookClientObservation, setBookClientObservation] = useState('');
-
-  const [showAnamnese, setShowAnamnese] = useState(false);
-  const [anamneseData, setAnamneseData] = useState<AnamneseData>(initialAnamnese);
 
   const bodyScrollRef = useRef<HTMLDivElement>(null);
   const headerScrollRef = useRef<HTMLDivElement>(null);
@@ -177,10 +170,8 @@ export function SupervisorView({ employees, appointments, services, clients, onR
 
   const scrollToCurrentTime = () => {
     if (bodyScrollRef.current) {
-      const START_HOUR = 8;
-      const HOUR_HEIGHT = 34;
       const now = new Date();
-      const currentMinuteTop = ((now.getHours() - START_HOUR) * 60 + now.getMinutes()) * (HOUR_HEIGHT / 60);
+      const currentMinuteTop = ((now.getHours() - SCHEDULE_CONFIG.START_HOUR) * 60 + now.getMinutes()) * SCHEDULE_CONFIG.MINUTE_HEIGHT;
       bodyScrollRef.current.scrollTo({ top: Math.max(0, currentMinuteTop - 100), behavior: 'smooth' });
     }
   };
@@ -189,16 +180,24 @@ export function SupervisorView({ employees, appointments, services, clients, onR
 
   const handleGridClick = useCallback((e: React.MouseEvent<HTMLDivElement>, empId: string) => {
     if (e.target !== e.currentTarget) return; // ignore clicks on events
-    const y = e.nativeEvent.offsetY;
-    const START_HOUR = 8;
-    const MINUTE_HEIGHT = 100 / 60;
-    const totalMinutes = y / MINUTE_HEIGHT;
-    const hours = Math.floor(totalMinutes / 60) + START_HOUR;
+    const columnRect = e.currentTarget.getBoundingClientRect();
+    const scrollTop = bodyScrollRef.current?.scrollTop || 0;
+    const clickY = e.clientY - columnRect.top + scrollTop;
+    const totalMinutes = clickY / SCHEDULE_CONFIG.MINUTE_HEIGHT;
+    const hours = Math.floor(totalMinutes / 60) + SCHEDULE_CONFIG.START_HOUR;
     const minutes = Math.floor(totalMinutes % 60);
     const roundedMinutes = Math.round(minutes / 15) * 15;
     let finalHours = hours;
     let finalMins = roundedMinutes;
     if (finalMins === 60) { finalHours += 1; finalMins = 0; }
+    if (finalHours < SCHEDULE_CONFIG.START_HOUR) {
+      finalHours = SCHEDULE_CONFIG.START_HOUR;
+      finalMins = 0;
+    }
+    if (finalHours > SCHEDULE_CONFIG.END_HOUR || (finalHours === SCHEDULE_CONFIG.END_HOUR && finalMins > 0)) {
+      finalHours = SCHEDULE_CONFIG.END_HOUR;
+      finalMins = 0;
+    }
     const formattedTime = `${finalHours.toString().padStart(2, '0')}:${finalMins.toString().padStart(2, '0')}`;
     setBookTime(formattedTime);
     setBookEmp(empId);
@@ -207,13 +206,6 @@ export function SupervisorView({ employees, appointments, services, clients, onR
 
   const handleEditAppointmentClick = useCallback((app: Appointment) => {
     setEditingAppointmentId(app.id);
-    setEditBookName(app.clientName);
-    setEditBookPhone(app.contact && app.contact !== 'Não informado' ? formatPhone(app.contact) : '');
-    setEditBookDate(app.date);
-    setEditBookTime(app.time);
-    setEditBookEmp(app.assignedEmployeeId);
-    setEditBookService(app.services || []);
-    setEditBookDetails(app.observation || '');
   }, []);
 
   const handleDeleteAppointmentClick = useCallback((id: string) => {
@@ -244,13 +236,6 @@ export function SupervisorView({ employees, appointments, services, clients, onR
   
   // Estado para controlar a edição de Agendamento
   const [editingAppointmentId, setEditingAppointmentId] = useState<string | null>(null);
-  const [editBookName, setEditBookName] = useState('');
-  const [editBookPhone, setEditBookPhone] = useState('');
-  const [editBookDate, setEditBookDate] = useState('');
-  const [editBookTime, setEditBookTime] = useState('');
-  const [editBookEmp, setEditBookEmp] = useState('');
-  const [editBookService, setEditBookService] = useState<string[]>([]);
-  const [editBookDetails, setEditBookDetails] = useState('');
 
   // Estado para controlar o filtro do histórico no modal
   const [historyFilter, setHistoryFilter] = useState<'all' | '7days' | 'month'>('all');
@@ -419,112 +404,7 @@ export function SupervisorView({ employees, appointments, services, clients, onR
     setNewServiceName(''); setNewServicePrice(''); setNewServiceDuration('60'); setNewServiceIcon(SERVICE_ICONS[0]); setNewServiceDescription('');
   };
 
-  // Função Rápida da Recepção (Estilo Google)
-  const handleQuickBook = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (receptionDate < getLocalTodayString()) {
-      setErrorMessage('Não é possível criar novos agendamentos para datas no passado.');
-      return;
-    }
-    // Validação para não criar agendamento em hora passada no dia de hoje
-    if (receptionDate === getLocalTodayString()) {
-      const now = new Date();
-      const currentTime = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
-      if (bookTime < currentTime) {
-        setErrorMessage('Não é possível criar agendamentos em horários que já passaram.');
-        return;
-      }
-    }
-    if (bookTime < '09:00' || bookTime > '21:00') {
-      setErrorMessage('Os agendamentos devem ser feitos no horário comercial (09:00 às 21:00).');
-      return;
-    }
-
-    if (bookService.length === 0) {
-      setErrorMessage('Por favor, selecione pelo menos um serviço.');
-      return;
-    }
-
-    // Verifica se já existe um agendamento conflitante com base na duração
-    const isOccupied = hasOverlap(receptionDate, bookTime, bookEmp, bookService, appointments, services);
-    if (isOccupied) {
-      setErrorMessage('Não foi possível adicionar a reserva. Tente outro horário em alguns instantes.');
-      return;
-    }
-
-    const finalDetails = showAnamnese 
-      ? `${bookDetails}${formatAnamnese(anamneseData)}`.trim() 
-      : bookDetails;
-
-    const matchedClient = clients.find(c => c.nome.toLowerCase() === bookName.toLowerCase().trim());
-    if (matchedClient && onEditClient) {
-      await onEditClient(matchedClient.id, { observacao: bookClientObservation });
-    }
-
-    const success = await onAddAppointment({
-      clientName: bookName, 
-      contact: bookPhone || 'Não informado',
-      date: receptionDate, 
-      time: bookTime,
-      guests: 1, 
-      specialNeeds: [],
-      observation: finalDetails,
-      assignedEmployeeId: bookEmp, services: bookService
-    });
-    if (success !== false) {
-      setBookClientObservation('');
-      setShowNewBookingModal(false); setBookName(''); setBookPhone(''); setBookTime(''); setBookEmp(''); setBookService([]);
-      setBookDetails('');
-      setShowAnamnese(false);
-      setAnamneseData(initialAnamnese);
-      setToastMessage('Agendamento salvo na escala!');
-      setTimeout(() => setToastMessage(null), 3000);
-    }
-  };
-
-  // Função de Editar Agendamento
-  const handleEditSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (editBookDate < getLocalTodayString()) {
-      setErrorMessage('Não é possível mover o agendamento para uma data no passado.');
-      return;
-    }
-    // Validação para não mover agendamento para hora passada no dia de hoje
-    if (editBookDate === getLocalTodayString()) {
-      const now = new Date();
-      const currentTime = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
-      if (editBookTime < currentTime) {
-        setErrorMessage('Não é possível mover um agendamento para um horário que já passou.');
-        return;
-      }
-    }
-    if (editBookTime < '09:00' || editBookTime > '21:00') {
-      setErrorMessage('Os agendamentos devem ser feitos no horário comercial (09:00 às 21:00).');
-      return;
-    }
-
-    // Verifica conflito de duração ignorando o próprio agendamento que está sendo editado
-    const isOccupied = hasOverlap(editBookDate, editBookTime, editBookEmp, editBookService, appointments, services, editingAppointmentId);
-    if (isOccupied) {
-      setErrorMessage('Não foi possível adicionar a reserva. Tente outro horário em alguns instantes.');
-      return;
-    }
-
-    const success = await onEditAppointment(editingAppointmentId!, {
-      clientName: editBookName, contact: editBookPhone || 'Não informado', date: editBookDate, time: editBookTime,
-      specialNeeds: [],
-      observation: editBookDetails,
-      assignedEmployeeId: editBookEmp, services: editBookService
-    });
-    if (success !== false) {
-      setEditingAppointmentId(null);
-      setToastMessage('Agendamento atualizado com sucesso!');
-      setTimeout(() => setToastMessage(null), 3000);
-    }
-  };
-
-  const editingApp = appointments.find(a => a.id === editingAppointmentId);
-  const isEditingCompleted = editingApp?.status === 'completed';
+  const editingApp = appointments.find((a) => a.id === editingAppointmentId) || null;
 
   const todayStr = getLocalTodayString();
   const upcomingClients = appointments
@@ -583,7 +463,7 @@ export function SupervisorView({ employees, appointments, services, clients, onR
           <p className="text-on-surface-variant font-body">Acompanhe métricas, gerencie escalas e a equipe.</p>
         </div>
         
-        <div className="flex bg-surface-container-low p-1 rounded-full border border-outline-variant/20 overflow-x-auto max-w-full">
+        <div className="flex bg-surface-container-low p-1 rounded-full border border-outline-variant/20 overflow-x-auto max-w-full w-full md:w-auto">
           <button 
             onClick={() => setActiveTab('dashboard')}
             className={`px-6 py-2 rounded-full text-xs font-bold tracking-wide uppercase whitespace-nowrap transition-all ${activeTab === 'dashboard' ? 'bg-primary text-on-primary shadow-md' : 'text-on-surface-variant hover:text-primary'}`}
@@ -617,10 +497,6 @@ export function SupervisorView({ employees, appointments, services, clients, onR
           </button>
         </div>
       </div>
-
-      <datalist id="client-list">
-        {clients?.map(c => <option key={c.id} value={c.nome} />)}
-      </datalist>
 
       {activeTab === 'dashboard' && (
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-8">
@@ -814,7 +690,7 @@ export function SupervisorView({ employees, appointments, services, clients, onR
           </div>
 
           {/* Direita: Escala Vertical dos Profissionais */}
-          <div className="flex-1 bg-surface-container-lowest p-6 lg:p-8 rounded-3xl border border-outline-variant/10 shadow-sm overflow-hidden flex flex-col">
+          <div className="flex-1 bg-surface-container-lowest p-4 md:p-6 lg:p-8 rounded-3xl border border-outline-variant/10 shadow-sm overflow-hidden flex flex-col">
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4 shrink-0">
               <div>
                 <h3 className="text-2xl font-headline text-primary">Agenda da Recepção</h3>
@@ -827,13 +703,14 @@ export function SupervisorView({ employees, appointments, services, clients, onR
             </div>
 
             {(() => {
-              const START_HOUR = 8;
-              const END_HOUR = 21;
-              const HOUR_HEIGHT = 34; // px por hora
-              const MINUTE_HEIGHT = HOUR_HEIGHT / 60;
+              const START_HOUR = SCHEDULE_CONFIG.START_HOUR;
+              const END_HOUR = SCHEDULE_CONFIG.END_HOUR;
+              const HOUR_HEIGHT = SCHEDULE_CONFIG.HOUR_HEIGHT;
+              const MINUTE_HEIGHT = SCHEDULE_CONFIG.MINUTE_HEIGHT;
+              const CURRENT_TIME_LINE = SCHEDULE_CONFIG.CURRENT_TIME_LINE;
               const timelineHours = Array.from({length: END_HOUR - START_HOUR + 1}, (_, i) => START_HOUR + i);
               
-              const currentViewDateObj = new Date(`${receptionDate}T12:00:00Z`);
+              const currentViewDateObj = new Date(`${receptionDate}T12:00:00`);
               const dayOfWeek = currentViewDateObj.getDay();
               
               // Oculta admin (se vier) e filtra quem não trabalha no dia
@@ -848,16 +725,16 @@ export function SupervisorView({ employees, appointments, services, clients, onR
 
               return (
                 <div className="flex-1 bg-surface-container-lowest border border-outline-variant/20 rounded-2xl overflow-hidden flex flex-col relative shadow-sm h-full group">
-                  <button onClick={() => scrollHorizontally('left')} className="absolute left-2 top-1/2 -translate-y-1/2 z-30 w-10 h-10 bg-surface shadow-md rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-surface-container border border-outline-variant/20 text-on-surface"><span className="material-symbols-outlined">chevron_left</span></button>
-                  <button onClick={() => scrollHorizontally('right')} className="absolute right-2 top-1/2 -translate-y-1/2 z-30 w-10 h-10 bg-surface shadow-md rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-surface-container border border-outline-variant/20 text-on-surface"><span className="material-symbols-outlined">chevron_right</span></button>
-                  <button onClick={scrollToCurrentTime} className="absolute bottom-4 right-4 z-30 bg-primary-container text-on-primary-container px-4 py-2 rounded-full shadow-md font-bold text-xs uppercase tracking-widest flex items-center gap-2 hover:bg-primary/20 transition-all opacity-0 group-hover:opacity-100"><span className="material-symbols-outlined text-[16px]">my_location</span> Agora</button>
+                  <button onClick={() => scrollHorizontally('left')} className="absolute left-2 top-1/2 -translate-y-1/2 z-30 w-10 h-10 bg-surface shadow-md rounded-full flex items-center justify-center opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity hover:bg-surface-container border border-outline-variant/20 text-on-surface"><span className="material-symbols-outlined">chevron_left</span></button>
+                  <button onClick={() => scrollHorizontally('right')} className="absolute right-2 top-1/2 -translate-y-1/2 z-30 w-10 h-10 bg-surface shadow-md rounded-full flex items-center justify-center opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity hover:bg-surface-container border border-outline-variant/20 text-on-surface"><span className="material-symbols-outlined">chevron_right</span></button>
+                  <button onClick={scrollToCurrentTime} className="absolute bottom-4 right-4 z-30 bg-primary-container text-on-primary-container px-4 py-2 rounded-full shadow-md font-bold text-xs uppercase tracking-widest flex items-center gap-2 hover:bg-primary/20 transition-all opacity-100 md:opacity-0 md:group-hover:opacity-100"><span className="material-symbols-outlined text-[16px]">my_location</span> Agora</button>
 
                   {/* Cabeçalho Fixo (Info dos Profissionais) */}
                   <div className="flex border-b border-outline-variant/20 bg-surface-container-lowest/95 backdrop-blur z-20">
-                    <div className="w-14 shrink-0 border-r border-outline-variant/10"></div>
+                    <div className="w-12 md:w-14 shrink-0 border-r border-outline-variant/10"></div>
                     <div className="flex flex-1 overflow-x-hidden" ref={headerScrollRef}>
                       {activeEmployees.map(emp => (
-                        <div key={emp.id} className="flex-1 min-w-[220px] p-2 text-center border-r border-outline-variant/10">
+                        <div key={emp.id} className="flex-1 min-w-[180px] md:min-w-[220px] p-2 text-center border-r border-outline-variant/10">
                           <img src={emp.avatar} alt={emp.name} className="w-9 h-9 mx-auto rounded-full border-2 border-surface-container shadow-sm object-cover" />
                           <h4 className="font-bold text-on-surface text-xs mt-1 truncate">{emp.name.split(' ')[0]}</h4>
                           <p className="text-[9px] text-on-surface-variant uppercase tracking-widest truncate">{emp.specialty}</p>
@@ -877,10 +754,10 @@ export function SupervisorView({ employees, appointments, services, clients, onR
                     }}
                   >
                     {/* Coluna Fixa das Horas (Sticky lateral) */}
-                    <div className="w-14 shrink-0 bg-surface-container-lowest/95 backdrop-blur border-r border-outline-variant/20 sticky left-0 z-20 flex flex-col">
+                    <div className="w-12 md:w-14 shrink-0 bg-surface-container-lowest/95 backdrop-blur border-r border-outline-variant/20 sticky left-0 z-20 flex flex-col">
                       {timelineHours.map(hour => (
                         <div key={hour} className="relative w-full" style={{ height: HOUR_HEIGHT }}>
-                          <span className="absolute -top-2.5 right-2 text-[10px] font-bold text-on-surface-variant bg-surface-container-lowest px-1">
+                          <span className="absolute top-1 right-2 text-[10px] font-bold text-on-surface-variant bg-surface-container-lowest px-1 leading-none">
                             {hour.toString().padStart(2, '0')}:00
                           </span>
                         </div>
@@ -888,7 +765,7 @@ export function SupervisorView({ employees, appointments, services, clients, onR
                     </div>
 
                     {/* Malha de Fundo (Linhas horizontais) */}
-                    <div className="absolute inset-0 left-14 flex flex-col pointer-events-none z-0 min-w-max">
+                    <div className="absolute inset-0 flex flex-col pointer-events-none z-0 min-w-max">
                       {timelineHours.map(hour => (
                         <div key={hour} className="w-full border-b border-outline-variant/10" style={{ height: HOUR_HEIGHT }}></div>
                       ))}
@@ -896,14 +773,14 @@ export function SupervisorView({ employees, appointments, services, clients, onR
 
                     {/* Linha Vermelha de Tempo Real */}
                     {isTodayView && currentMinuteTop >= 0 && currentMinuteTop <= ((END_HOUR - START_HOUR) * HOUR_HEIGHT) && (
-                      <div className="absolute left-14 right-0 z-10 pointer-events-none flex items-center min-w-max" style={{ top: currentMinuteTop }}>
-                        <div className="w-2 h-2 rounded-full bg-error -ml-1"></div>
-                        <div className="h-[2px] w-full bg-error/70"></div>
+                      <div className={CURRENT_TIME_LINE.CONTAINER_CLASS} style={{ top: currentMinuteTop }}>
+                        <div className={CURRENT_TIME_LINE.DOT_CLASS}></div>
+                        <div className={CURRENT_TIME_LINE.BAR_CLASS}></div>
                       </div>
                     )}
 
                     {/* Colunas Relativas Clicáveis dos Profissionais */}
-                    <div className="flex flex-1 z-10 min-w-max">
+                    <div className="relative flex flex-1 z-10 min-w-max">
                       {activeEmployees.map(emp => (
                         <EmployeeScheduleColumn
                           key={emp.id}
@@ -1040,95 +917,21 @@ export function SupervisorView({ employees, appointments, services, clients, onR
 
         {/* Modal de Nova Reserva Rápida (Recepção) */}
         {showNewBookingModal && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-            <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="bg-surface-container-lowest p-8 rounded-3xl shadow-xl max-w-lg w-full border border-outline-variant/20 max-h-[90vh] overflow-y-auto">
-              <div className="flex justify-between items-center mb-6">
-                <h2 className="text-2xl font-headline text-primary">Novo Agendamento</h2>
-                <button onClick={() => setShowNewBookingModal(false)} className="p-2 hover:bg-surface-container rounded-full text-on-surface-variant"><span className="material-symbols-outlined">close</span></button>
-              </div>
-              
-            <form onSubmit={handleQuickBook} className="space-y-4">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-[10px] font-bold text-on-surface-variant tracking-[0.15em] uppercase mb-2">Cliente</label>
-                    <input required list="client-list" type="text" value={bookName} onChange={e => {
-                    const newName = e.target.value;
-                    setBookName(newName);
-                    const selClient = clients.find(c => c.nome.toLowerCase() === newName.toLowerCase().trim());
-                    if (selClient) {
-                      setBookPhone(selClient.telefone || '');
-                      setBookClientObservation(selClient.observacao || '');
-                    } else {
-                      setBookClientObservation('');
-                    }
-                  }} className="w-full bg-surface-container-low border border-outline-variant/20 rounded-xl p-3 focus:ring-1 focus:ring-primary text-sm" placeholder="Digite ou selecione..." autoComplete="off" />
-                  </div>
-                  <div>
-                    <label className="block text-[10px] font-bold text-on-surface-variant tracking-[0.15em] uppercase mb-2">Telefone / WhatsApp</label>
-                    <input type="text" value={bookPhone} onChange={e => setBookPhone(formatPhone(e.target.value))} maxLength={15} className="w-full bg-surface-container-low border border-outline-variant/20 rounded-xl p-3 focus:ring-1 focus:ring-primary text-sm" placeholder="(00) 00000-0000" />
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-[10px] font-bold text-on-surface-variant tracking-[0.15em] uppercase mb-2">Horário</label>
-                    <input required type="time" min="09:00" max="21:00" value={bookTime} onChange={e => setBookTime(e.target.value)} className="w-full bg-surface-container-low border border-outline-variant/20 rounded-xl p-3 focus:ring-1 focus:ring-primary text-sm" />
-                  </div>
-                  <div>
-                <label className="block text-[10px] font-bold text-on-surface-variant tracking-[0.15em] uppercase mb-2">Serviços</label>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-48 overflow-y-auto pr-2 custom-scrollbar">
-                  {services.map(s => (
-                    <div
-                      key={s.id}
-                      onClick={() => setBookService(prev => prev.includes(s.nome) ? prev.filter(item => item !== s.nome) : [...prev, s.nome])}
-                      className={`p-3 rounded-xl border cursor-pointer transition-all ${bookService.includes(s.nome) ? 'bg-primary/10 border-primary shadow-sm' : 'bg-surface-container-lowest border-outline-variant/30 hover:border-primary/50'}`}
-                    >
-                      <div className="flex justify-between items-start mb-1 gap-2">
-                         <span className={`text-xs font-bold leading-tight ${bookService.includes(s.nome) ? 'text-primary' : 'text-on-surface'}`}>{s.nome}</span>
-                         <span className="text-[10px] font-bold text-on-surface-variant whitespace-nowrap bg-surface-container px-1.5 py-0.5 rounded">R$ {Number(s.preco).toFixed(2)}</span>
-                      </div>
-                      {s.descricao && <p className="text-[10px] text-on-surface-variant leading-snug line-clamp-2 mt-1">{s.descricao}</p>}
-                    </div>
-                  ))}
-                </div>
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-[10px] font-bold text-on-surface-variant tracking-[0.15em] uppercase mb-2">Profissional Atribuído</label>
-                  <select required value={bookEmp} onChange={e => setBookEmp(e.target.value)} className="w-full bg-surface-container-low border border-outline-variant/20 rounded-xl p-3 focus:ring-1 focus:ring-primary text-sm">
-                    <option value="" disabled>Selecione...</option>
-                    {employees.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
-                  </select>
-                </div>
-              <div className="border-t border-outline-variant/20 pt-4 mt-4">
-                {clients.some(c => c.nome.toLowerCase() === bookName.toLowerCase().trim()) && (
-                  <div className="mb-4">
-                    <label className="block text-[10px] font-bold text-secondary tracking-[0.15em] uppercase mb-2 flex items-center gap-1">
-                      <span className="material-symbols-outlined text-[14px]">stars</span>
-                      Recomendações / Perfil Clínico Fixo
-                    </label>
-                    <textarea rows={2} value={bookClientObservation} onChange={e => setBookClientObservation(e.target.value)} className="w-full bg-secondary-container/30 border border-secondary/20 rounded-xl p-3 focus:ring-1 focus:ring-secondary text-sm resize-none text-on-surface" placeholder="Informações que ficarão salvas para sempre no histórico do paciente (Ex: Possui Pinos, Cirurgias Anteriores, etc)." />
-                  </div>
-                )}
-                <div>
-                  <div className="flex justify-between items-center mb-2">
-                    <label className="block text-[10px] font-bold text-on-surface-variant tracking-[0.15em] uppercase">Detalhes deste Agendamento</label>
-                      <button 
-                        type="button" 
-                        onClick={() => setShowAnamnese(true)}
-                        className={`text-[10px] font-bold uppercase tracking-widest px-2 py-1 rounded transition-colors bg-surface-container text-on-surface-variant hover:bg-surface-container-high`}
-                      >
-                        + Ficha de Anamnese
-                      </button>
-                    </div>
-                    <textarea rows={4} value={bookDetails} onChange={e => setBookDetails(e.target.value)} className="w-full bg-surface-container-low border border-outline-variant/20 rounded-xl p-3 focus:ring-1 focus:ring-primary text-sm min-h-[120px] resize-none" placeholder="Ex: Cliente prefere atendimento mais leve, restrições, etc." />
-                  </div>
-                </div>
-                <button disabled={isAddingAppointment} type="submit" className={`w-full mt-4 bg-primary text-on-primary py-3 rounded-xl font-bold text-xs uppercase tracking-[0.2em] shadow-sm hover:bg-primary-dim transition-all ${isAddingAppointment ? 'opacity-70 cursor-not-allowed' : 'active:scale-[0.98]'}`}>
-                  {isAddingAppointment ? 'Salvando...' : 'Confirmar Agendamento'}
-                </button>
-              </form>
-            </motion.div>
-          </div>
+          <BookingModal
+            receptionDate={receptionDate}
+            initialTime={bookTime || '09:00'}
+            initialEmpId={bookEmp || ''}
+            clients={clients}
+            services={services}
+            employees={employees}
+            appointments={appointments}
+            isAddingAppointment={isAddingAppointment}
+            onClose={() => setShowNewBookingModal(false)}
+            onAddAppointment={onAddAppointment}
+            onEditClient={onEditClient}
+            setErrorMessage={setErrorMessage}
+            setToastMessage={setToastMessage}
+          />
         )}
 
         {/* Modal de Próximos Agendamentos */}
@@ -1150,89 +953,24 @@ export function SupervisorView({ employees, appointments, services, clients, onR
             appointments={appointments}
             onClose={() => setShowNewBlockModal(false)}
             onAddBloqueio={onAddBloqueio}
+            onReassignAppointment={onReassign}
             setErrorMessage={setErrorMessage}
             setToastMessage={setToastMessage}
           />
         )}
 
-        {/* Floating Anamnese Modal */}
-        {showAnamnese && (
-          <AnamneseForm 
-            data={anamneseData} 
-            onChange={setAnamneseData} 
-            onClose={() => setShowAnamnese(false)} 
-          />
-        )}
-
         {/* Modal de Edição de Agendamento */}
-        {editingAppointmentId && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-            <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="bg-surface-container-lowest p-8 rounded-3xl shadow-xl max-w-lg w-full border border-outline-variant/20 max-h-[90vh] overflow-y-auto">
-              <div className="flex justify-between items-center mb-6">
-                <h2 className="text-2xl font-headline text-primary">Editar Agendamento</h2>
-                <button onClick={() => setEditingAppointmentId(null)} className="p-2 hover:bg-surface-container rounded-full text-on-surface-variant"><span className="material-symbols-outlined">close</span></button>
-              </div>
-              {isEditingCompleted && (
-                <div className="bg-secondary-container/50 text-on-secondary-container p-3 rounded-xl text-xs flex gap-2 items-center mb-4">
-                  <span className="material-symbols-outlined text-[16px]">info</span>
-                  <span>Este agendamento já foi concluído. Apenas os serviços prestados podem ser ajustados.</span>
-                </div>
-              )}
-              <form onSubmit={handleEditSubmit} className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-[10px] font-bold text-on-surface-variant tracking-[0.15em] uppercase mb-2">Cliente</label>
-                    <input required list="client-list" type="text" value={editBookName} onChange={e => setEditBookName(e.target.value)} disabled={isEditingCompleted} className={`w-full bg-surface-container-low border border-outline-variant/20 rounded-xl p-3 focus:ring-1 focus:ring-primary text-sm ${isEditingCompleted ? 'opacity-50 cursor-not-allowed' : ''}`} autoComplete="off" />
-                  </div>
-                  <div>
-                    <label className="block text-[10px] font-bold text-on-surface-variant tracking-[0.15em] uppercase mb-2">Telefone / WhatsApp</label>
-                    <input type="text" value={editBookPhone} onChange={e => setEditBookPhone(formatPhone(e.target.value))} maxLength={15} disabled={isEditingCompleted} className={`w-full bg-surface-container-low border border-outline-variant/20 rounded-xl p-3 focus:ring-1 focus:ring-primary text-sm ${isEditingCompleted ? 'opacity-50 cursor-not-allowed' : ''}`} placeholder="(00) 00000-0000" />
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-[10px] font-bold text-on-surface-variant tracking-[0.15em] uppercase mb-2">Data</label>
-                    <input required type="date" value={editBookDate} onChange={e => setEditBookDate(e.target.value)} disabled={isEditingCompleted} className={`w-full bg-surface-container-low border border-outline-variant/20 rounded-xl p-3 focus:ring-1 focus:ring-primary text-sm ${isEditingCompleted ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`} />
-                  </div>
-                  <div>
-                    <label className="block text-[10px] font-bold text-on-surface-variant tracking-[0.15em] uppercase mb-2">Horário</label>
-                    <input required type="time" min="09:00" max="21:00" value={editBookTime} onChange={e => setEditBookTime(e.target.value)} disabled={isEditingCompleted} className={`w-full bg-surface-container-low border border-outline-variant/20 rounded-xl p-3 focus:ring-1 focus:ring-primary text-sm ${isEditingCompleted ? 'opacity-50 cursor-not-allowed' : ''}`} />
-                  </div>
-            </div>
-            <div>
-              <label className="block text-[10px] font-bold text-on-surface-variant tracking-[0.15em] uppercase mb-2">Profissional Atribuído</label>
-              <select required value={editBookEmp} onChange={e => setEditBookEmp(e.target.value)} disabled={isEditingCompleted} className={`w-full bg-surface-container-low border border-outline-variant/20 rounded-xl p-3 focus:ring-1 focus:ring-primary text-sm ${isEditingCompleted ? 'opacity-50 cursor-not-allowed' : ''}`}>
-                {employees.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="block text-[10px] font-bold text-on-surface-variant tracking-[0.15em] uppercase mb-2">Serviços</label>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-48 overflow-y-auto pr-2 custom-scrollbar">
-                {services.map(s => (
-                  <div
-                    key={s.id}
-                    onClick={() => setEditBookService(prev => prev.includes(s.nome) ? prev.filter(item => item !== s.nome) : [...prev, s.nome])}
-                    className={`p-3 rounded-xl border cursor-pointer transition-all ${editBookService.includes(s.nome) ? 'bg-primary/10 border-primary shadow-sm' : 'bg-surface-container-lowest border-outline-variant/30 hover:border-primary/50'}`}
-                  >
-                    <div className="flex justify-between items-start mb-1 gap-2">
-                       <span className={`text-xs font-bold leading-tight ${editBookService.includes(s.nome) ? 'text-primary' : 'text-on-surface'}`}>{s.nome}</span>
-                       <span className="text-[10px] font-bold text-on-surface-variant whitespace-nowrap bg-surface-container px-1.5 py-0.5 rounded">R$ {Number(s.preco).toFixed(2)}</span>
-                    </div>
-                    {s.descricao && <p className="text-[10px] text-on-surface-variant leading-snug line-clamp-2 mt-1">{s.descricao}</p>}
-                  </div>
-                ))}
-              </div>
-                </div>
-                <div className="border-t border-outline-variant/20 pt-4 mt-4">
-                  <div>
-                    <label className="block text-[10px] font-bold text-on-surface-variant tracking-[0.15em] uppercase mb-2">Detalhes / Observações</label>
-                    <textarea rows={4} value={editBookDetails} onChange={e => setEditBookDetails(e.target.value)} disabled={isEditingCompleted} className={`w-full bg-surface-container-low border border-outline-variant/20 rounded-xl p-3 focus:ring-1 focus:ring-primary text-sm min-h-[120px] resize-none ${isEditingCompleted ? 'opacity-50 cursor-not-allowed' : ''}`} placeholder="Ex: Cliente prefere atendimento mais leve, restrições, etc." />
-                  </div>
-                </div>
-                <button type="submit" className="w-full mt-4 bg-primary text-on-primary py-3 rounded-xl font-bold text-xs uppercase tracking-[0.2em] shadow-sm hover:bg-primary-dim transition-all">Salvar Alterações</button>
-              </form>
-            </motion.div>
-          </div>
+        {editingApp && (
+          <EditAppointmentModal
+            appointment={editingApp}
+            employees={employees}
+            services={services}
+            appointments={appointments}
+            onClose={() => setEditingAppointmentId(null)}
+            onEditAppointment={onEditAppointment}
+            setErrorMessage={setErrorMessage}
+            setToastMessage={setToastMessage}
+          />
         )}
 
         {/* Modal de Confirmação de Exclusão */}

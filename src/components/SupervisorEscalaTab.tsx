@@ -10,7 +10,7 @@ import { DeleteAppointmentModal } from '../DeleteAppointmentModal';
 import { useScheduleModals } from '../hooks/useScheduleModals';
 import { EmployeeScheduleColumn, ScheduleGridProvider, type ScheduleGridActions, type ScheduleGridContext } from './ScheduleGridColumn';
 
-const { START_HOUR, END_HOUR, HOUR_HEIGHT, MINUTE_HEIGHT } = SCHEDULE_CONFIG;
+const { START_HOUR, END_HOUR, HOUR_HEIGHT, MINUTE_HEIGHT, CURRENT_TIME_LINE } = SCHEDULE_CONFIG;
 
 interface SupervisorEscalaTabProps {
   employees: Employee[];
@@ -247,17 +247,21 @@ export function SupervisorEscalaTab({ employees, appointments, services, clients
                 </div>
               ))}
             </div>
+            <div className="absolute inset-0 flex flex-col pointer-events-none z-0 min-w-max">
+              {timelineHours.map(hour => (
+                <div key={hour} className="w-full border-b border-outline-variant/10" style={{ height: HOUR_HEIGHT }}></div>
+              ))}
+            </div>
+
             {isTodayView && currentMinuteTop >= 0 && currentMinuteTop <= ((END_HOUR - START_HOUR) * HOUR_HEIGHT) && (
-              <div className="absolute left-14 right-0 z-10 pointer-events-none flex items-center min-w-max" style={{ top: currentMinuteTop }}>
-                <div className="w-2 h-2 rounded-full bg-error -ml-1"></div><div className="h-[2px] w-full bg-error/70"></div>
+              <div className={CURRENT_TIME_LINE.CONTAINER_CLASS} style={{ top: currentMinuteTop }}>
+                <div className={CURRENT_TIME_LINE.DOT_CLASS}></div>
+                <div className={CURRENT_TIME_LINE.BAR_CLASS}></div>
               </div>
             )}
             <ScheduleGridProvider schedule={scheduleGridContext} actions={scheduleGridActions}>
               <div
-                className="flex flex-1 z-10 min-w-max"
-                style={{
-                  backgroundImage: `repeating-linear-gradient(to bottom, transparent 0px, transparent ${HOUR_HEIGHT - 1}px, rgba(255,255,255,0.06) ${HOUR_HEIGHT - 1}px, rgba(255,255,255,0.06) ${HOUR_HEIGHT}px)`,
-                }}
+                className="relative flex flex-1 z-10 min-w-max"
               >
                 {activeEmployees.map(emp => (
                   <EmployeeScheduleColumn key={emp.id} emp={emp} />

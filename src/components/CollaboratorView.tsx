@@ -11,7 +11,7 @@ import { EditAppointmentModal } from '../EditAppointmentModal';
 import { DeleteAppointmentModal } from '../DeleteAppointmentModal';
 import { useScheduleModals } from '../hooks/useScheduleModals';
 
-const { START_HOUR, END_HOUR, HOUR_HEIGHT, MINUTE_HEIGHT } = SCHEDULE_CONFIG;
+const { START_HOUR, END_HOUR, HOUR_HEIGHT, MINUTE_HEIGHT, CURRENT_TIME_LINE } = SCHEDULE_CONFIG;
 
 interface CollaboratorViewProps {
   currentUser: Employee;
@@ -282,15 +282,23 @@ export function CollaboratorView({
               ))}
             </div>
 
-            {/* Coluna de Agendamentos */}
-            <div className="flex-1 relative" onClick={(e) => handleGridClick(e, currentUser.id)} style={{ height: (END_HOUR - START_HOUR) * HOUR_HEIGHT }}>
-              {/* Linhas de Hora */}
-              {timelineHours.slice(1).map(hour => (
-                <div key={`line-${hour}`} className="absolute w-full border-b border-outline-variant/10 pointer-events-none" style={{ top: (hour - START_HOUR) * HOUR_HEIGHT, height: HOUR_HEIGHT }}></div>
+            {/* Malha de Fundo Continua */}
+            <div className="absolute inset-0 flex flex-col pointer-events-none z-0 min-w-max">
+              {timelineHours.map(hour => (
+                <div key={`bg-line-${hour}`} className="w-full border-b border-outline-variant/10" style={{ height: HOUR_HEIGHT }}></div>
               ))}
+            </div>
+
+            {/* Coluna de Agendamentos */}
+            <div className="relative flex-1 z-10" onClick={(e) => handleGridClick(e, currentUser.id)} style={{ height: (END_HOUR - START_HOUR) * HOUR_HEIGHT }}>
 
               {/* Linha do Tempo Atual */}
-              {isTodayView && currentMinuteTop >= 0 && <div className="absolute left-0 right-0 z-10 pointer-events-none flex items-center" style={{ top: currentMinuteTop }}><div className="w-2 h-2 rounded-full bg-error -ml-1"></div><div className="h-[2px] w-full bg-error/70"></div></div>}
+              {isTodayView && currentMinuteTop >= 0 && currentMinuteTop <= ((END_HOUR - START_HOUR) * HOUR_HEIGHT) && (
+                <div className={CURRENT_TIME_LINE.CONTAINER_CLASS} style={{ top: currentMinuteTop }}>
+                  <div className={CURRENT_TIME_LINE.DOT_CLASS}></div>
+                  <div className={CURRENT_TIME_LINE.BAR_CLASS}></div>
+                </div>
+              )}
 
               {/* Bloqueios */}
               {myBlockers.map(bloq => {
