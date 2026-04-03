@@ -1,57 +1,64 @@
 @import "tailwindcss";
 
 @theme {
-  --color-tertiary-fixed-dim: #d0e8d9;
-  --color-surface-container: #F5F5F4;
-  --color-on-error-container: #6e0a12;
-  --color-surface-container-lowest: #ffffff;
-  --color-on-secondary-fixed: #503c1d;
-  --color-primary-container: #cef7b4;
-  --color-outline-variant: #E7E5E4;
-  --color-tertiary-fixed: #def7e7;
-  --color-surface-dim: #E7E5E4;
-  --color-secondary-container: #feddb3;
-  --color-surface-variant: #F5F5F4;
-  --color-on-primary: #ffffff;
-  --color-on-tertiary-fixed: #384c41;
-  --color-on-tertiary: #e7ffef;
-  --color-on-surface: #1C1917;
-  --color-surface-tint: #4d6f39;
-  --color-primary-fixed-dim: #b3d99a;
-  --color-tertiary-container: #def7e7;
-  --color-error-dim: #67040d;
-  --color-on-surface-variant: #78716C;
-  --color-on-tertiary-container: #4a5f53;
-  --color-primary: #4d6f39;
-  --color-secondary-dim: #664f2f;
-  --color-inverse-on-surface: #F5F5F4;
-  --color-primary-dim: #3e5a2d;
-  --color-secondary-fixed: #feddb3;
-  --color-on-error: #fff7f6;
-  --color-surface-container-highest: #D6D3D1;
-  --color-on-secondary-fixed-variant: #6f5836;
-  --color-on-tertiary-fixed-variant: #54695d;
-  --color-on-secondary: #fff8f2;
-  --color-surface-container-low: #FAFAF9;
-  --color-on-primary-fixed-variant: #365026;
-  --color-tertiary: #4e6458;
-  --color-secondary: #735b3a;
-  --color-on-primary-fixed: #132107;
-  --color-primary-fixed: #cef7b4;
-  --color-surface: #ffffff;
-  --color-error: #a83836;
-  --color-inverse-surface: #292524;
-  --color-on-primary-container: #132107;
-  --color-on-secondary-container: #644e2e;
-  --color-on-background: #1C1917;
-  --color-error-container: #fa746f;
-  --color-inverse-primary: #b3d99a;
-  --color-secondary-fixed-dim: #efd0a6;
-  --color-surface-container-high: #E7E5E4;
-  --color-outline: #A8A29E;
-  --color-surface-bright: #ffffff;
+  /* Base & Surface */
   --color-background: #F5F5F4;
+  --color-surface: #ffffff;
+  --color-surface-dim: #E7E5E4;
+  --color-surface-bright: #ffffff;
+  --color-surface-variant: #F5F5F4; /* Same as background */
+  --color-surface-container-lowest: #ffffff;
+  --color-surface-container-low: #FAFAF9;
+  --color-surface-container: #F5F5F4; /* Same as background */
+  --color-surface-container-high: #E7E5E4; /* Same as surface-dim */
+  --color-surface-container-highest: #D6D3D1;
+
+  /* Primary, Secondary, Tertiary */
+  --color-primary: #4d6f39;
+  --color-primary-dim: #3e5a2d;
+  --color-primary-container: #cef7b4;
+  --color-primary-fixed: #cef7b4;
+  --color-primary-fixed-dim: #b3d99a;
+  --color-secondary: #735b3a;
+  --color-secondary-dim: #664f2f;
+  --color-secondary-container: #feddb3;
+  --color-secondary-fixed: #feddb3;
+  --color-secondary-fixed-dim: #efd0a6;
+  --color-tertiary: #4e6458;
   --color-tertiary-dim: #43584c;
+  --color-tertiary-container: #def7e7;
+  --color-tertiary-fixed: #def7e7;
+  --color-tertiary-fixed-dim: #d0e8d9;
+
+  /* Text & Content ("On" Colors) */
+  --color-on-background: #1C1917;
+  --color-on-surface: #1C1917;
+  --color-on-surface-variant: #78716C;
+  --color-on-primary: #ffffff;
+  --color-on-primary-container: #132107;
+  --color-on-primary-fixed: #132107;
+  --color-on-primary-fixed-variant: #365026;
+  --color-on-secondary: #fff8f2;
+  --color-on-secondary-container: #644e2e;
+  --color-on-secondary-fixed: #503c1d;
+  --color-on-secondary-fixed-variant: #6f5836;
+  --color-on-tertiary: #e7ffef;
+  --color-on-tertiary-container: #4a5f53;
+  --color-on-tertiary-fixed: #384c41;
+  --color-on-tertiary-fixed-variant: #54695d;
+  --color-on-error: #fff7f6;
+  --color-on-error-container: #6e0a12;
+
+  /* Other Semantic Colors */
+  --color-outline: #A8A29E;
+  --color-outline-variant: #E7E5E4; /* Same as surface-dim */
+  --color-error: #a83836;
+  --color-error-container: #fa746f;
+  --color-error-dim: #67040d;
+  --color-inverse-on-surface: #F5F5F4;
+  --color-inverse-surface: #292524;
+  --color-inverse-primary: #b3d99a;
+  --color-surface-tint: #4d6f39; /* Often same as primary */
 
   --font-headline: "Noto Serif", serif;
   --font-body: "Manrope", sans-serif;

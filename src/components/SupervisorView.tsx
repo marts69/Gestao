@@ -1,7 +1,126 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { motion } from 'motion/react';
 import { Appointment, Employee } from '../types';
+import { AnamneseForm, AnamneseData, formatAnamnese, initialAnamnese } from './AnamneseForm';
+import { formatPhone } from '../utils/formatters';
+import { getDuration, getLocalTodayString, hasOverlap } from './appointmentUtils';
+import { SupervisorEquipeTab } from './SupervisorEquipeTab';
+import { UpcomingAppointmentsModal } from './UpcomingAppointmentsModal';
 
+
+const EmployeeScheduleColumn = React.memo(({
+  emp,
+  receptionDate,
+  scheduleSearchTerm,
+  appointments,
+  services,
+  START_HOUR,
+  END_HOUR,
+  MINUTE_HEIGHT,
+  HOUR_HEIGHT,
+  isTodayView,
+  currentMinute,
+  todayStr,
+  onGridClick,
+  onDeleteBloqueio,
+  onCompleteAppointment,
+  onEditAppointmentClick,
+  onDeleteAppointmentClick,
+  setToastMessage
+}: any) => {
+  // Calculamos os filtros internamente no filho para evitar quebrar a memoização com referências novas de array do pai
+  const empAppointments = appointments
+    .filter((a: any) => a.date === receptionDate && a.assignedEmployeeId === emp.id)
+    .filter((a: any) => scheduleSearchTerm === '' || a.clientName.toLowerCase().includes(scheduleSearchTerm.toLowerCase()) || a.services.some((s: string) => s.toLowerCase().includes(scheduleSearchTerm.toLowerCase())));
+  
+  const empBlockers = (emp.bloqueios || []).filter((b: any) => b.data === receptionDate);
+
+  return (
+    <div onClick={(e) => onGridClick(e, emp.id)} className="flex-1 min-w-[220px] border-r border-outline-variant/10 relative cursor-pointer hover:bg-primary/5 transition-colors" style={{ height: (END_HOUR - START_HOUR + 1) * HOUR_HEIGHT }}>
+      {/* Rendereização dos Bloqueios */}
+      {empBlockers.map((bloq: any) => {
+        const [sH, sM] = bloq.horaInicio.split(':').map(Number);
+        const [eH, eM] = bloq.horaFim.split(':').map(Number);
+        const top = ((sH - START_HOUR) * 60 + sM) * MINUTE_HEIGHT;
+        const endTop = ((eH - START_HOUR) * 60 + eM) * MINUTE_HEIGHT;
+        const height = Math.max(endTop - top, 20);
+
+        return (
+          <div key={bloq.id} className="absolute left-1 right-1 bg-surface-container-high/60 backdrop-blur-sm rounded-lg border border-outline-variant/30 flex items-center justify-center group overflow-hidden" style={{ top, height }}>
+            <div className="absolute inset-0 opacity-10 repeating-linear-gradient-45 from-transparent to-on-surface-variant"></div>
+            <span className="text-[10px] font-bold tracking-widest uppercase text-on-surface-variant z-10 truncate px-2">{bloq.motivo}</span>
+            {onDeleteBloqueio && (
+              <button onClick={(e) => { e.stopPropagation(); onDeleteBloqueio(bloq.id); }} className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 p-1 text-on-surface hover:text-error bg-surface shadow-sm rounded-full z-20 transition-all">
+                <span className="material-symbols-outlined text-[14px]">delete</span>
+              </button>
+            )}
+          </div>
+        );
+      })}
+
+      {/* Renderização dos Agendamentos */}
+      {empAppointments.map((app: any) => {
+        const isCompleted = app.status === 'completed';
+        const appDateTime = new Date(`${app.date}T${app.time}:00`);
+        const isPastDay = app.date < todayStr;
+        const isNoShow = !isCompleted && isPastDay;
+        
+        const [appH, appM] = app.time.split(':').map(Number);
+        const top = ((appH - START_HOUR) * 60 + appM) * MINUTE_HEIGHT;
+        
+        const durationMins = getDuration(app.services, services);
+        const height = Math.max(durationMins * MINUTE_HEIGHT, 30);
+
+        const delayMinutes = (!isCompleted && isTodayView && currentMinute > appDateTime) 
+          ? Math.floor((currentMinute.getTime() - appDateTime.getTime()) / 60000) 
+          : 0;
+
+        const cardStatusClass = isCompleted 
+          ? "bg-surface-container-low/80 border-outline-variant/30 opacity-70" 
+          : (isNoShow || delayMinutes > 0) 
+            ? "bg-error-container/20 border-error/40 shadow-sm" 
+            : "bg-surface-container-lowest border-primary/20 shadow-md";
+        const sideColorClass = isCompleted ? "bg-outline-variant/50" : (isNoShow || delayMinutes > 0) ? "bg-error" : "bg-primary";
+
+        return (
+          <div key={app.id} className={`absolute left-1 right-1 rounded-xl border ${cardStatusClass} flex flex-col group overflow-hidden transition-all hover:z-20`} style={{ top, height }}>
+            <div className={`absolute top-0 bottom-0 left-0 w-1 ${sideColorClass}`}></div>
+            <div className="pl-2 pr-1 py-1 flex flex-col h-full">
+              <div className="flex justify-between items-start">
+                <span className={`text-[10px] font-bold leading-none ${isCompleted ? 'text-outline-variant line-through' : (isNoShow || delayMinutes > 0) ? 'text-error' : 'text-primary'}`}>{app.time}</span>
+                
+                <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity bg-surface-container-lowest/90 rounded-full shadow-sm p-0.5 border border-outline-variant/20 absolute right-1 top-1 z-30">
+                  {!isCompleted && (
+                    <button onClick={(e) => { e.stopPropagation(); onCompleteAppointment(app.id); setToastMessage('Ok!'); setTimeout(() => setToastMessage(null), 2000); }} className="text-on-surface-variant hover:text-primary p-1 rounded-full"><span className="material-symbols-outlined text-[14px]">check_circle</span></button>
+                  )}
+                  <button onClick={(e) => { e.stopPropagation(); onEditAppointmentClick(app); }} className="text-on-surface-variant hover:text-primary p-1 rounded-full"><span className="material-symbols-outlined text-[14px]">edit</span></button>
+                  <button onClick={(e) => { e.stopPropagation(); onDeleteAppointmentClick(app.id); }} className="text-on-surface-variant hover:text-error p-1 rounded-full"><span className="material-symbols-outlined text-[14px]">cancel</span></button>
+                </div>
+              </div>
+              
+              <h5 className="font-bold text-on-surface text-[11px] leading-tight truncate mt-0.5" title={app.clientName}>{app.clientName}</h5>
+              
+              {height > 40 && (
+                <p className="text-[9px] text-on-surface-variant leading-tight line-clamp-2 mt-0.5" title={app.services.join(', ')}>{app.services.join(', ')}</p>
+              )}
+
+              {height > 60 && app.observation && (
+                <p className="text-[8px] text-on-surface-variant my-1 italic border-l-2 border-outline-variant/30 pl-1.5 line-clamp-1">{app.observation}</p>
+              )}
+
+              {height > 50 && (
+                <div className="mt-auto flex gap-1 pt-1 border-t border-outline-variant/10">
+                  {delayMinutes > 0 && <span className="bg-error/10 text-error text-[8px] px-1 rounded font-bold">{delayMinutes}m atraso</span>}
+                  {isNoShow && <span className="bg-error/10 text-error text-[8px] px-1 rounded font-bold">Falta</span>}
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+});
 
 interface SupervisorViewProps {
   employees: Employee[];
@@ -16,37 +135,98 @@ interface SupervisorViewProps {
   onEditService: (id: string, service: any) => Promise<boolean>;
   onDeleteService: (id: string) => void;
   onAddAppointment: (appointment: any) => Promise<boolean | void> | void;
+  isAddingAppointment?: boolean;
   onDeleteAppointment: (id: string) => Promise<boolean | void> | void;
   onEditAppointment: (id: string, appointment: any) => Promise<boolean | void> | void;
   onCompleteAppointment: (id: string) => void;
+  onEditClient?: (id: string, clientData: any) => Promise<boolean | void> | void;
+  onDeleteClient?: (id: string) => Promise<boolean | void> | void;
+  onAddBloqueio?: (b: any) => Promise<boolean>;
+  onDeleteBloqueio?: (id: string) => Promise<boolean>;
 }
 
-export function SupervisorView({ employees, appointments, services, clients, onReassign, onAddEmployee, onDeleteEmployee, onEditEmployee, onAddService, onEditService, onDeleteService, onAddAppointment, onDeleteAppointment, onEditAppointment, onCompleteAppointment }: SupervisorViewProps) {
+export function SupervisorView({ employees, appointments, services, clients, onReassign, onAddEmployee, onDeleteEmployee, onEditEmployee, onAddService, onEditService, onDeleteService, onAddAppointment, isAddingAppointment, onDeleteAppointment, onEditAppointment, onCompleteAppointment, onEditClient, onAddBloqueio, onDeleteBloqueio }: SupervisorViewProps) {
   const [activeTab, setActiveTab] = useState<'dashboard' | 'escala' | 'equipe' | 'servicos'>('dashboard');
+  const [showUpcomingAppointments, setShowUpcomingAppointments] = useState(false);
   
   // Recepção/Escala State
-  const getLocalTodayString = () => {
-    const d = new Date();
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-  };
-  
   const [receptionDate, setReceptionDate] = useState(getLocalTodayString());
   const [scheduleSearchTerm, setScheduleSearchTerm] = useState('');
   const [showNewBookingModal, setShowNewBookingModal] = useState(false);
+  const [showNewBlockModal, setShowNewBlockModal] = useState(false);
+  const [blockReason, setBlockReason] = useState('');
+  const [blockEndTime, setBlockEndTime] = useState('');
   const [bookName, setBookName] = useState('');
   const [bookPhone, setBookPhone] = useState('');
   const [bookTime, setBookTime] = useState('');
   const [bookEmp, setBookEmp] = useState('');
   const [bookService, setBookService] = useState<string[]>([]);
-  const [bookHighBloodPressure, setBookHighBloodPressure] = useState(false);
-  const [bookPregnant, setBookPregnant] = useState(false);
   const [bookDetails, setBookDetails] = useState('');
+  const [bookClientObservation, setBookClientObservation] = useState('');
+
+  const [showAnamnese, setShowAnamnese] = useState(false);
+  const [anamneseData, setAnamneseData] = useState<AnamneseData>(initialAnamnese);
+
+  const bodyScrollRef = useRef<HTMLDivElement>(null);
+  const headerScrollRef = useRef<HTMLDivElement>(null);
+
+  const scrollHorizontally = (direction: 'left' | 'right') => {
+    if (bodyScrollRef.current) {
+      bodyScrollRef.current.scrollBy({ left: direction === 'left' ? -300 : 300, behavior: 'smooth' });
+    }
+  };
+
+  const scrollToCurrentTime = () => {
+    if (bodyScrollRef.current) {
+      const START_HOUR = 8;
+      const HOUR_HEIGHT = 34;
+      const now = new Date();
+      const currentMinuteTop = ((now.getHours() - START_HOUR) * 60 + now.getMinutes()) * (HOUR_HEIGHT / 60);
+      bodyScrollRef.current.scrollTo({ top: Math.max(0, currentMinuteTop - 100), behavior: 'smooth' });
+    }
+  };
+
+  // useEffect removido para evitar pular automaticamente ao abrir a tela
+
+  const handleGridClick = useCallback((e: React.MouseEvent<HTMLDivElement>, empId: string) => {
+    if (e.target !== e.currentTarget) return; // ignore clicks on events
+    const y = e.nativeEvent.offsetY;
+    const START_HOUR = 8;
+    const MINUTE_HEIGHT = 100 / 60;
+    const totalMinutes = y / MINUTE_HEIGHT;
+    const hours = Math.floor(totalMinutes / 60) + START_HOUR;
+    const minutes = Math.floor(totalMinutes % 60);
+    const roundedMinutes = Math.round(minutes / 15) * 15;
+    let finalHours = hours;
+    let finalMins = roundedMinutes;
+    if (finalMins === 60) { finalHours += 1; finalMins = 0; }
+    const formattedTime = `${finalHours.toString().padStart(2, '0')}:${finalMins.toString().padStart(2, '0')}`;
+    setBookTime(formattedTime);
+    setBookEmp(empId);
+    setShowNewBookingModal(true);
+  }, []);
+
+  const handleEditAppointmentClick = useCallback((app: Appointment) => {
+    setEditingAppointmentId(app.id);
+    setEditBookName(app.clientName);
+    setEditBookPhone(app.contact && app.contact !== 'Não informado' ? formatPhone(app.contact) : '');
+    setEditBookDate(app.date);
+    setEditBookTime(app.time);
+    setEditBookEmp(app.assignedEmployeeId);
+    setEditBookService(app.services || []);
+    setEditBookDetails(app.observation || '');
+  }, []);
+
+  const handleDeleteAppointmentClick = useCallback((id: string) => {
+    setAppointmentToDelete(id);
+  }, []);
 
   // New Employee Form
   const [newEmpName, setNewEmpName] = useState('');
   const [newEmpEmail, setNewEmpEmail] = useState('');
   const [newEmpSpecialty, setNewEmpSpecialty] = useState('');
-  const [newEmpRole, setNewEmpRole] = useState<'supervisor' | 'collaborator' | 'receptionist'>('collaborator');
+  const [newEmpRole, setNewEmpRole] = useState<'supervisor' | 'collaborator'>('collaborator');
+  const [newEmpDiasTrabalho, setNewEmpDiasTrabalho] = useState<string[]>(['1','2','3','4','5','6']);
   const [isSubmitting, setIsSubmitting] = useState(false);
   
   // Estado para exibir as credenciais de acesso após a criação do usuário
@@ -71,8 +251,6 @@ export function SupervisorView({ employees, appointments, services, clients, onR
   const [editBookTime, setEditBookTime] = useState('');
   const [editBookEmp, setEditBookEmp] = useState('');
   const [editBookService, setEditBookService] = useState<string[]>([]);
-  const [editBookHighBloodPressure, setEditBookHighBloodPressure] = useState(false);
-  const [editBookPregnant, setEditBookPregnant] = useState(false);
   const [editBookDetails, setEditBookDetails] = useState('');
 
   // Estado para controlar o filtro do histórico no modal
@@ -99,6 +277,21 @@ export function SupervisorView({ employees, appointments, services, clients, onR
   const [employeeCurrentPage, setEmployeeCurrentPage] = useState(1);
   const EMPLOYEES_PER_PAGE = 6; // Quantidade de cartões por página
 
+  // Calendar Logic for Escala
+  const [currentMonthDate, setCurrentMonthDate] = useState(new Date());
+  const year = currentMonthDate.getFullYear();
+  const month = currentMonthDate.getMonth();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const firstDayOfMonth = new Date(year, month, 1).getDay();
+  const monthNames = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
+  const dayNames = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+  const calendarDays = [];
+  for (let i = 0; i < firstDayOfMonth; i++) calendarDays.push(null);
+  for (let i = 1; i <= daysInMonth; i++) calendarDays.push(i);
+  const handlePrevMonth = () => setCurrentMonthDate(new Date(year, month - 1, 1));
+  const handleNextMonth = () => setCurrentMonthDate(new Date(year, month + 1, 1));
+  const formatDayString = (d: number) => `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+
   // NOVO: Controle de Atrasos e Auto-Exclusão
   const [currentMinute, setCurrentMinute] = useState(new Date());
 
@@ -106,16 +299,6 @@ export function SupervisorView({ employees, appointments, services, clients, onR
     const interval = setInterval(() => setCurrentMinute(new Date()), 60000); // Atualiza a cada 1 min
     return () => clearInterval(interval);
   }, []);
-
-  // Função de máscara de telefone
-  const formatPhone = (value: string) => {
-    if (!value) return value;
-    const phoneNumber = value.replace(/[^\d]/g, '');
-    const phoneNumberLength = phoneNumber.length;
-    if (phoneNumberLength < 3) return phoneNumber;
-    if (phoneNumberLength < 8) return `(${phoneNumber.slice(0, 2)}) ${phoneNumber.slice(2)}`;
-    return `(${phoneNumber.slice(0, 2)}) ${phoneNumber.slice(2, 7)}-${phoneNumber.slice(7, 11)}`;
-  };
 
   // Função para formatar minutos em texto legível (ex: 1h 30m)
   const formatDuration = (minutes: number) => {
@@ -125,24 +308,6 @@ export function SupervisorView({ employees, appointments, services, clients, onR
     if (h > 0 && m > 0) return `${h}h ${m}m`;
     if (h > 0) return `${h}h`;
     return `${m}m`;
-  };
-
-  // Helper para verificar duração e conflito de agendamentos
-  const getDuration = (serviceNames: string[]) => serviceNames.reduce((sum, name) => {
-    const srv = services.find(s => s.nome === name);
-    return sum + (Number(srv?.duracao) || 60);
-  }, 0);
-
-  const hasOverlap = (targetDate: string, targetTime: string, empId: string, serviceNames: string[], ignoreAppId: string | null = null) => {
-    const newStart = parseInt(targetTime.split(':')[0]) * 60 + parseInt(targetTime.split(':')[1]);
-    const newEnd = newStart + getDuration(serviceNames);
-
-    return appointments.some(a => {
-      if (a.id === ignoreAppId || a.date !== targetDate || a.assignedEmployeeId !== empId || a.status !== 'scheduled' || !a.time) return false;
-      const existStart = parseInt(a.time.split(':')[0]) * 60 + parseInt(a.time.split(':')[1]);
-      const existEnd = existStart + getDuration(a.services);
-      return newStart < existEnd && newEnd > existStart;
-    });
   };
 
   const handleAddEmployee = async (e: React.FormEvent) => {
@@ -157,7 +322,8 @@ export function SupervisorView({ employees, appointments, services, clients, onR
         name: newEmpName,
         email: newEmpEmail,
         specialty: newEmpSpecialty,
-        role: newEmpRole
+        role: newEmpRole,
+        diasTrabalho: newEmpDiasTrabalho.join(',')
       });
 
       if (typeof success === 'string') {
@@ -175,6 +341,7 @@ export function SupervisorView({ employees, appointments, services, clients, onR
         email: generatedEmail,
         role: newEmpRole,
         specialty: newEmpSpecialty,
+        diasTrabalho: newEmpDiasTrabalho.join(','),
         avatar: `https://api.dicebear.com/7.x/notionists/svg?seed=${newEmpName}`
       });
       
@@ -202,6 +369,7 @@ export function SupervisorView({ employees, appointments, services, clients, onR
     setNewEmpEmail('');
     setNewEmpSpecialty('');
     setNewEmpRole('collaborator');
+    setNewEmpDiasTrabalho(['1','2','3','4','5','6']);
   };
 
   // Calculate max services for progress bar scaling
@@ -228,6 +396,26 @@ export function SupervisorView({ employees, appointments, services, clients, onR
     
     return true;
   }).sort((a, b) => new Date(`${b.date}T${b.time}`).getTime() - new Date(`${a.date}T${a.time}`).getTime()) : [];
+
+  const handleBlockSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!onAddBloqueio) return;
+    const success = await onAddBloqueio({
+      data: receptionDate,
+      horaInicio: bookTime,
+      horaFim: blockEndTime,
+      motivo: blockReason,
+      colaboradorId: bookEmp
+    });
+    if (success) {
+      setShowNewBlockModal(false);
+      setBlockReason(''); setBlockEndTime(''); setBookTime(''); setBookEmp('');
+      setToastMessage('Bloqueio registrado!'); 
+      setTimeout(() => setToastMessage(null), 3000);
+    } else {
+      setErrorMessage('Erro ao registrar bloqueio.');
+    }
+  };
 
   // Função de criar serviço
   const handleServiceSubmit = async (e: React.FormEvent) => {
@@ -259,6 +447,15 @@ export function SupervisorView({ employees, appointments, services, clients, onR
       setErrorMessage('Não é possível criar novos agendamentos para datas no passado.');
       return;
     }
+    // Validação para não criar agendamento em hora passada no dia de hoje
+    if (receptionDate === getLocalTodayString()) {
+      const now = new Date();
+      const currentTime = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+      if (bookTime < currentTime) {
+        setErrorMessage('Não é possível criar agendamentos em horários que já passaram.');
+        return;
+      }
+    }
     if (bookTime < '09:00' || bookTime > '21:00') {
       setErrorMessage('Os agendamentos devem ser feitos no horário comercial (09:00 às 21:00).');
       return;
@@ -270,10 +467,19 @@ export function SupervisorView({ employees, appointments, services, clients, onR
     }
 
     // Verifica se já existe um agendamento conflitante com base na duração
-    const isOccupied = hasOverlap(receptionDate, bookTime, bookEmp, bookService);
+    const isOccupied = hasOverlap(receptionDate, bookTime, bookEmp, bookService, appointments, services);
     if (isOccupied) {
       setErrorMessage('Não foi possível adicionar a reserva. Tente outro horário em alguns instantes.');
       return;
+    }
+
+    const finalDetails = showAnamnese 
+      ? `${bookDetails}${formatAnamnese(anamneseData)}`.trim() 
+      : bookDetails;
+
+    const matchedClient = clients.find(c => c.nome.toLowerCase() === bookName.toLowerCase().trim());
+    if (matchedClient && onEditClient) {
+      await onEditClient(matchedClient.id, { observacao: bookClientObservation });
     }
 
     const success = await onAddAppointment({
@@ -282,18 +488,16 @@ export function SupervisorView({ employees, appointments, services, clients, onR
       date: receptionDate, 
       time: bookTime,
       guests: 1, 
-      specialNeeds: [
-        ...(bookHighBloodPressure ? ['Pressão Alta'] : []),
-        ...(bookPregnant ? ['Gravidez'] : [])
-      ],
-      notes: bookDetails,
+      specialNeeds: [],
+      observation: finalDetails,
       assignedEmployeeId: bookEmp, services: bookService
     });
     if (success !== false) {
+      setBookClientObservation('');
       setShowNewBookingModal(false); setBookName(''); setBookPhone(''); setBookTime(''); setBookEmp(''); setBookService([]);
-      setBookHighBloodPressure(false);
-      setBookPregnant(false);
       setBookDetails('');
+      setShowAnamnese(false);
+      setAnamneseData(initialAnamnese);
       setToastMessage('Agendamento salvo na escala!');
       setTimeout(() => setToastMessage(null), 3000);
     }
@@ -306,13 +510,22 @@ export function SupervisorView({ employees, appointments, services, clients, onR
       setErrorMessage('Não é possível mover o agendamento para uma data no passado.');
       return;
     }
+    // Validação para não mover agendamento para hora passada no dia de hoje
+    if (editBookDate === getLocalTodayString()) {
+      const now = new Date();
+      const currentTime = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+      if (editBookTime < currentTime) {
+        setErrorMessage('Não é possível mover um agendamento para um horário que já passou.');
+        return;
+      }
+    }
     if (editBookTime < '09:00' || editBookTime > '21:00') {
       setErrorMessage('Os agendamentos devem ser feitos no horário comercial (09:00 às 21:00).');
       return;
     }
 
     // Verifica conflito de duração ignorando o próprio agendamento que está sendo editado
-    const isOccupied = hasOverlap(editBookDate, editBookTime, editBookEmp, editBookService, editingAppointmentId);
+    const isOccupied = hasOverlap(editBookDate, editBookTime, editBookEmp, editBookService, appointments, services, editingAppointmentId);
     if (isOccupied) {
       setErrorMessage('Não foi possível adicionar a reserva. Tente outro horário em alguns instantes.');
       return;
@@ -320,11 +533,8 @@ export function SupervisorView({ employees, appointments, services, clients, onR
 
     const success = await onEditAppointment(editingAppointmentId!, {
       clientName: editBookName, contact: editBookPhone || 'Não informado', date: editBookDate, time: editBookTime,
-      specialNeeds: [
-        ...(editBookHighBloodPressure ? ['Pressão Alta'] : []),
-        ...(editBookPregnant ? ['Gravidez'] : [])
-      ],
-      notes: editBookDetails,
+      specialNeeds: [],
+      observation: editBookDetails,
       assignedEmployeeId: editBookEmp, services: editBookService
     });
     if (success !== false) {
@@ -332,105 +542,6 @@ export function SupervisorView({ employees, appointments, services, clients, onR
       setToastMessage('Agendamento atualizado com sucesso!');
       setTimeout(() => setToastMessage(null), 3000);
     }
-  };
-
-  // Função para imprimir comprovante de agendamento (Salvar PDF)
-  const handlePrintAppointment = (app: Appointment, empName: string, printType: 'a4' | 'thermal' = 'a4') => {
-    // Calcula o preço dos serviços associados a este agendamento
-    const servicesWithPrices = app.services.map(sName => {
-      const srv = services.find(s => s.nome === sName);
-      return { name: sName, price: Number(srv?.preco) || 0 };
-    });
-    const totalPrice = servicesWithPrices.reduce((sum, s) => sum + s.price, 0);
-
-    const printWindow = window.open('', '_blank');
-    if (!printWindow) return;
-    
-    const a4Styles = `
-      @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
-      body { font-family: 'Inter', sans-serif; padding: 40px; color: #1f2937; max-width: 400px; margin: 0 auto; background: #f9fafb; }
-      .receipt-container { background: #fff; border: 1px solid #e5e7eb; border-radius: 16px; padding: 30px; box-shadow: 0 4px 6px rgba(0,0,0,0.02); }
-      .header { text-align: center; margin-bottom: 25px; }
-      .header img { max-height: 70px; margin-bottom: 12px; border-radius: 8px; }
-      .header h1 { margin: 0; color: #111827; font-size: 20px; font-weight: 700; letter-spacing: -0.5px; }
-      .header p { margin: 4px 0 0 0; color: #6b7280; font-size: 11px; text-transform: uppercase; letter-spacing: 1.5px; }
-      .divider { border-bottom: 1px dashed #d1d5db; margin: 20px 0; }
-      .info-row { display: flex; justify-content: space-between; margin-bottom: 12px; font-size: 13px; }
-      .info-row span.label { color: #6b7280; }
-      .info-row span.value { font-weight: 600; text-align: right; color: #1f2937; }
-      .services-list { margin-top: 15px; }
-      .service-item { display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 13px; }
-      .service-item .s-name { color: #374151; }
-      .service-item .s-price { font-weight: 600; }
-      .total-row { display: flex; justify-content: space-between; margin-top: 15px; padding-top: 15px; border-top: 2px solid #e5e7eb; font-size: 18px; font-weight: 700; color: #111827; }
-      .alert-box { margin-top: 25px; background: #fef2f2; border: 1px solid #fecaca; padding: 12px; border-radius: 8px; }
-      .alert-box strong { color: #dc2626; font-size: 11px; text-transform: uppercase; display: block; margin-bottom: 4px; letter-spacing: 0.5px; }
-      .alert-box p { margin: 0; font-size: 12px; color: #991b1b; }
-      .footer { margin-top: 30px; font-size: 11px; text-align: center; color: #9ca3af; }
-    `;
-
-    const thermalStyles = `
-      @import url('https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&display=swap');
-      body { font-family: 'Courier Prime', monospace; padding: 0; margin: 0; color: #000; width: 80mm; background: #fff; }
-      .receipt-container { padding: 10px; width: calc(100% - 20px); }
-      .header { text-align: center; margin-bottom: 15px; }
-      .header img { max-height: 50px; margin-bottom: 5px; filter: grayscale(100%); }
-      .header h1 { margin: 0; color: #000; font-size: 16px; font-weight: 700; }
-      .header p { margin: 2px 0 0 0; color: #000; font-size: 10px; text-transform: uppercase; }
-      .divider { border-bottom: 1px dashed #000; margin: 10px 0; }
-      .info-row { display: flex; justify-content: space-between; margin-bottom: 6px; font-size: 12px; }
-      .info-row span.label { color: #000; }
-      .info-row span.value { font-weight: 700; text-align: right; color: #000; }
-      .services-list { margin-top: 10px; }
-      .service-item { display: flex; justify-content: space-between; margin-bottom: 6px; font-size: 12px; }
-      .service-item .s-name { color: #000; }
-      .service-item .s-price { font-weight: 700; }
-      .total-row { display: flex; justify-content: space-between; margin-top: 10px; padding-top: 10px; border-top: 2px dashed #000; font-size: 14px; font-weight: 700; color: #000; }
-      .alert-box { margin-top: 15px; border: 1px dashed #000; padding: 8px; }
-      .alert-box strong { color: #000; font-size: 11px; text-transform: uppercase; display: block; margin-bottom: 4px; }
-      .alert-box p { margin: 0; font-size: 11px; color: #000; font-style: italic; }
-      .footer { margin-top: 20px; font-size: 10px; text-align: center; color: #000; }
-    `;
-
-    // Define a logo com base no tipo de impressão
-    const logoSrc = printType === 'thermal' 
-      ? 'https://ui-avatars.com/api/?name=Serenidade+Spa&background=000&color=fff&rounded=true&size=150' 
-      : 'https://ui-avatars.com/api/?name=Serenidade+Spa&background=0D9488&color=fff&rounded=true&size=150'; 
-
-    printWindow.document.write(`
-      <html>
-        <head><title>Comprovante - ${app.clientName}</title><style>${printType === 'a4' ? a4Styles : thermalStyles}</style></head>
-        <body><div class="receipt-container"><div class="header"><img src="${logoSrc}" alt="Logo" /><h1>Serenidade Spa</h1><p>Comprovante de Agendamento</p></div><div class="info-row"><span class="label">Cliente:</span> <span class="value">${app.clientName}</span></div><div class="info-row"><span class="label">Contato:</span> <span class="value">${app.contact}</span></div><div class="info-row"><span class="label">Data:</span> <span class="value">${app.date.split('-').reverse().join('/')}</span></div><div class="info-row"><span class="label">Horário:</span> <span class="value">${app.time}</span></div><div class="info-row"><span class="label">Profissional:</span> <span class="value">${empName}</span></div><div class="divider"></div><div class="services-list"><div style="font-size: 10px; color: #9ca3af; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 12px; font-weight: bold;">Serviços Solicitados</div>${servicesWithPrices.map(s => `<div class="service-item"><span class="s-name">${s.name}</span><span class="s-price">R$ ${s.price.toFixed(2)}</span></div>`).join('')}</div><div class="total-row"><span>Total Estimado</span><span>R$ ${totalPrice.toFixed(2)}</span></div>${((app as any).specialNeeds && (app as any).specialNeeds.length > 0) || (app as any).notes ? `<div class="alert-box">${(app as any).specialNeeds && (app as any).specialNeeds.length > 0 ? `<strong>⚠️ Atenção: ${(app as any).specialNeeds.join(', ')}</strong>` : ''}${(app as any).notes ? `<p><i>"${(app as any).notes}"</i></p>` : ''}</div>` : ''}<div class="footer">Gerado em ${new Date().toLocaleString('pt-BR')}</div></div><script>window.onload = function() { window.print(); window.close(); }</script></body>
-      </html>
-    `);
-    printWindow.document.close();
-  };
-
-  // Função para enviar o Comprovante formatado via WhatsApp
-  const handleSendReceiptWhatsApp = (app: Appointment, empName: string) => {
-    if (!app.contact || app.contact === 'Não informado') {
-      setErrorMessage('Cliente não possui telefone cadastrado para envio.');
-      return;
-    }
-    
-    const servicesWithPrices = app.services.map(sName => {
-      const srv = services.find(s => s.nome === sName);
-      return { name: sName, price: Number(srv?.preco) || 0 };
-    });
-    const totalPrice = servicesWithPrices.reduce((sum, s) => sum + s.price, 0);
-    
-    const text = encodeURIComponent(
-      `*Serenidade Spa - Comprovante de Agendamento*\n\n` +
-      `Olá, *${app.clientName}*! Seu agendamento está confirmado.\n\n` +
-      `📅 *Data:* ${app.date.split('-').reverse().join('/')}\n` +
-      `⏰ *Horário:* ${app.time}\n` +
-      `👤 *Profissional:* ${empName}\n\n` +
-      `*Serviços solicitados:*\n${servicesWithPrices.map(s => `• ${s.name} (R$ ${s.price.toFixed(2)})`).join('\n')}\n\n` +
-      `*Total Estimado:* R$ ${totalPrice.toFixed(2)}\n\n` +
-      `Aguardamos você!`
-    );
-    
-    window.open(`https://wa.me/${app.contact.replace(/\D/g, '')}?text=${text}`, '_blank');
   };
 
   const editingApp = appointments.find(a => a.id === editingAppointmentId);
@@ -517,6 +628,13 @@ export function SupervisorView({ employees, appointments, services, clients, onR
             className={`px-6 py-2 rounded-full text-xs font-bold tracking-wide uppercase whitespace-nowrap transition-all ${activeTab === 'servicos' ? 'bg-primary text-on-primary shadow-md' : 'text-on-surface-variant hover:text-primary'}`}
           >
             Serviços
+          </button>
+          <button 
+            onClick={() => setShowUpcomingAppointments(true)}
+            className="px-4 py-2 rounded-full text-xs font-bold tracking-wide uppercase whitespace-nowrap transition-all bg-secondary-container text-on-secondary-container hover:bg-secondary/20 shadow-sm flex items-center gap-2 ml-2"
+          >
+            <span className="material-symbols-outlined text-[16px]">event_note</span>
+            Próximos
           </button>
         </div>
       </div>
@@ -668,323 +786,186 @@ export function SupervisorView({ employees, appointments, services, clients, onR
       )}
 
       {activeTab === 'escala' && (
-        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="bg-surface-container-lowest p-8 rounded-3xl border border-outline-variant/10 shadow-sm">
-          <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
-            <div>
-              <h3 className="text-2xl font-headline text-primary">Agenda da Recepção</h3>
-              <p className="text-sm text-on-surface-variant">Controle total dos atendimentos e realocações.</p>
+        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col lg:flex-row gap-6">
+          {/* Esquerda: Mini Calendário (Google Calendar Style) */}
+          <div className="w-full lg:w-80 bg-surface-container-lowest p-6 rounded-3xl border border-outline-variant/10 shadow-sm h-fit shrink-0">
+            <div className="flex justify-between items-center mb-6">
+               <button onClick={handlePrevMonth} className="p-1.5 hover:bg-surface-container rounded-full text-on-surface-variant transition-colors"><span className="material-symbols-outlined text-[18px]">chevron_left</span></button>
+               <h3 className="text-sm font-bold text-primary uppercase tracking-widest">{monthNames[month]} {year}</h3>
+               <button onClick={handleNextMonth} className="p-1.5 hover:bg-surface-container rounded-full text-on-surface-variant transition-colors"><span className="material-symbols-outlined text-[18px]">chevron_right</span></button>
             </div>
-            <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
-              <div className="relative w-full sm:w-auto">
-                <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-outline-variant text-[18px]">search</span>
-                <input type="text" placeholder="Buscar Colaborador..." value={scheduleSearchTerm} onChange={e => setScheduleSearchTerm(e.target.value)} className="w-full sm:w-48 pl-10 pr-4 py-2 bg-surface-container-low border border-outline-variant/30 text-sm rounded-xl focus:ring-1 focus:ring-primary text-on-surface" />
-              </div>
-              <input type="date" value={receptionDate} onChange={e => setReceptionDate(e.target.value)} className="bg-surface-container-low border border-outline-variant/30 text-sm rounded-xl px-4 py-2 focus:ring-1 focus:ring-primary text-on-surface" />
+            <div className="grid grid-cols-7 gap-1 text-center mb-2">
+               {dayNames.map(day => (
+                 <span key={day} className="text-[10px] font-bold text-outline uppercase">{day}</span>
+               ))}
+            </div>
+            <div className="grid grid-cols-7 gap-1 text-center">
+               {calendarDays.map((d, i) => {
+                 if (!d) return <div key={`empty-${i}`} className="h-8"></div>;
+                 const dStr = formatDayString(d);
+                 const isSelected = receptionDate === dStr;
+                 const isToday = dStr === todayStr;
+                 return (
+                   <button 
+                     key={`day-${d}`} 
+                     onClick={() => setReceptionDate(dStr)}
+                     className={`h-8 w-8 mx-auto rounded-full text-xs font-medium flex items-center justify-center transition-all ${isSelected ? 'bg-primary text-on-primary shadow-md' : isToday ? 'border border-primary text-primary' : 'text-on-surface hover:bg-surface-container'}`}
+                   >
+                     {d}
+                   </button>
+                 );
+               })}
+            </div>
+            <div className="mt-6 flex flex-col gap-2">
               <button 
                 onClick={() => setShowNewBookingModal(true)}
-                className="bg-primary text-on-primary px-6 py-2 rounded-xl text-sm font-bold tracking-wide transition-all shadow-md hover:bg-primary-dim flex items-center gap-2"
+                className="w-full bg-primary text-on-primary py-2.5 rounded-xl text-xs font-bold uppercase tracking-widest transition-all shadow-sm hover:bg-primary-dim flex items-center justify-center gap-2"
               >
                 <span className="material-symbols-outlined text-[18px]">add</span>
                 Nova Reserva
               </button>
+              <button 
+                onClick={() => setShowNewBlockModal(true)}
+                className="w-full bg-error text-onError py-2.5 rounded-xl text-xs font-bold uppercase tracking-widest transition-all shadow-sm hover:bg-error/90 text-white flex items-center justify-center gap-2"
+              >
+                <span className="material-symbols-outlined text-[18px]">block</span>
+                Novo Bloqueio
+              </button>
             </div>
           </div>
 
-          {/* Linha do Tempo / Quadro Visual (Vertical) */}
-          <div className="flex flex-col gap-6 pb-4">
-            {employees.map(emp => {
-              const empAppointments = appointments
-                .filter(a => (a.status === 'scheduled' || a.status === 'completed') && a.date === receptionDate && a.assignedEmployeeId === emp.id)
-                .filter(a => scheduleSearchTerm === '' || a.clientName.toLowerCase().includes(scheduleSearchTerm.toLowerCase()) || a.services.some(s => s.toLowerCase().includes(scheduleSearchTerm.toLowerCase())))
-                .filter(a => {
-                  if (a.status !== 'completed') return true;
-                  if (a.date !== todayStr) return true; // Se estiver vendo dias antigos, mostra tudo para conferência
-                  
-                  const appDateTime = new Date(`${a.date}T${a.time}:00`);
-                  const durationMins = getDuration(a.services);
-                  const minutesSinceEnd = Math.floor((currentMinute.getTime() - (appDateTime.getTime() + durationMins * 60000)) / 60000);
-                  
-                  return minutesSinceEnd <= 30; // Some da tela 30 minutos após o horário previsto de término
-                })
-                .sort((a, b) => new Date(`${a.date}T${a.time}`).getTime() - new Date(`${b.date}T${b.time}`).getTime());
+          {/* Direita: Escala Vertical dos Profissionais */}
+          <div className="flex-1 bg-surface-container-lowest p-6 lg:p-8 rounded-3xl border border-outline-variant/10 shadow-sm overflow-hidden flex flex-col">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4 shrink-0">
+              <div>
+                <h3 className="text-2xl font-headline text-primary">Agenda da Recepção</h3>
+                <p className="text-sm text-on-surface-variant">Controle do dia {receptionDate.split('-').reverse().join('/')}</p>
+              </div>
+              <div className="relative w-full md:w-64">
+                <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-outline-variant text-[18px]">search</span>
+                <input type="text" placeholder="Buscar Cliente ou Serviço..." value={scheduleSearchTerm} onChange={e => setScheduleSearchTerm(e.target.value)} className="w-full pl-10 pr-4 py-2 bg-surface-container-low border border-outline-variant/30 text-sm rounded-xl focus:ring-1 focus:ring-primary text-on-surface" />
+              </div>
+            </div>
+
+            {(() => {
+              const START_HOUR = 8;
+              const END_HOUR = 21;
+              const HOUR_HEIGHT = 34; // px por hora
+              const MINUTE_HEIGHT = HOUR_HEIGHT / 60;
+              const timelineHours = Array.from({length: END_HOUR - START_HOUR + 1}, (_, i) => START_HOUR + i);
+              
+              const currentViewDateObj = new Date(`${receptionDate}T12:00:00Z`);
+              const dayOfWeek = currentViewDateObj.getDay();
+              
+              // Oculta admin (se vier) e filtra quem não trabalha no dia
+              const activeEmployees = employees.filter(emp => {
+                if (emp.id === 'admin') return false;
+                if (!emp.diasTrabalho) return true;
+                return emp.diasTrabalho.split(',').includes(String(dayOfWeek));
+              });
+
+              const isTodayView = receptionDate === todayStr;
+              const currentMinuteTop = isTodayView ? ((currentMinute.getHours() - START_HOUR) * 60 + currentMinute.getMinutes()) * MINUTE_HEIGHT : -100;
 
               return (
-                <div key={emp.id} className="w-full bg-surface-container-low/50 rounded-3xl p-6 border border-outline-variant/20">
-                  <div className="flex items-center gap-3 mb-6 border-b border-outline-variant/10 pb-4">
-                    <img src={emp.avatar} alt={emp.name} className="w-12 h-12 rounded-full object-cover border-2 border-surface-container-lowest shadow-sm" />
-                    <div>
-                      <h4 className="font-bold text-on-surface text-sm">{emp.name}</h4>
-                      <p className="text-[10px] text-on-surface-variant uppercase tracking-widest">{emp.specialty}</p>
-                    </div>
-                    <div className="ml-auto bg-surface-container-lowest px-3 py-1 rounded-xl text-xs font-bold text-primary shadow-sm border border-outline-variant/10">
-                      {empAppointments.length}
+                <div className="flex-1 bg-surface-container-lowest border border-outline-variant/20 rounded-2xl overflow-hidden flex flex-col relative shadow-sm h-full group">
+                  <button onClick={() => scrollHorizontally('left')} className="absolute left-2 top-1/2 -translate-y-1/2 z-30 w-10 h-10 bg-surface shadow-md rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-surface-container border border-outline-variant/20 text-on-surface"><span className="material-symbols-outlined">chevron_left</span></button>
+                  <button onClick={() => scrollHorizontally('right')} className="absolute right-2 top-1/2 -translate-y-1/2 z-30 w-10 h-10 bg-surface shadow-md rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-surface-container border border-outline-variant/20 text-on-surface"><span className="material-symbols-outlined">chevron_right</span></button>
+                  <button onClick={scrollToCurrentTime} className="absolute bottom-4 right-4 z-30 bg-primary-container text-on-primary-container px-4 py-2 rounded-full shadow-md font-bold text-xs uppercase tracking-widest flex items-center gap-2 hover:bg-primary/20 transition-all opacity-0 group-hover:opacity-100"><span className="material-symbols-outlined text-[16px]">my_location</span> Agora</button>
+
+                  {/* Cabeçalho Fixo (Info dos Profissionais) */}
+                  <div className="flex border-b border-outline-variant/20 bg-surface-container-lowest/95 backdrop-blur z-20">
+                    <div className="w-14 shrink-0 border-r border-outline-variant/10"></div>
+                    <div className="flex flex-1 overflow-x-hidden" ref={headerScrollRef}>
+                      {activeEmployees.map(emp => (
+                        <div key={emp.id} className="flex-1 min-w-[220px] p-2 text-center border-r border-outline-variant/10">
+                          <img src={emp.avatar} alt={emp.name} className="w-9 h-9 mx-auto rounded-full border-2 border-surface-container shadow-sm object-cover" />
+                          <h4 className="font-bold text-on-surface text-xs mt-1 truncate">{emp.name.split(' ')[0]}</h4>
+                          <p className="text-[9px] text-on-surface-variant uppercase tracking-widest truncate">{emp.specialty}</p>
+                        </div>
+                      ))}
                     </div>
                   </div>
 
-                  <>
-                    {empAppointments.length === 0 ? (
-                      <div className="text-center py-10 border-2 border-dashed border-outline-variant/20 rounded-2xl">
-                        <span className="material-symbols-outlined text-outline-variant/50 text-4xl mb-2">event_available</span>
-                        <p className="text-xs text-on-surface-variant font-medium">Agenda livre</p>
-                      </div>
-                    ) : (
-                      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-                      {empAppointments.map(app => {
-                        const isCompleted = app.status === 'completed';
-                        const appDateTime = new Date(`${app.date}T${app.time}:00`);
-                        const isToday = app.date === todayStr;
-                        const isPastDay = app.date < todayStr;
-                        const isNoShow = !isCompleted && isPastDay;
-                        const delayMinutes = (!isCompleted && isToday && currentMinute > appDateTime) 
-                          ? Math.floor((currentMinute.getTime() - appDateTime.getTime()) / 60000) 
-                          : 0;
-                        const appSpecialNeeds = (app as any).specialNeeds || [];
-                        const appNotes = (app as any).notes || '';
-
-                        const cardBaseClass = "p-5 rounded-2xl border shadow-sm relative group transition-all";
-                        const cardStatusClass = isCompleted 
-                          ? "bg-surface-container-lowest/50 border-outline-variant/20 opacity-70" 
-                          : (isNoShow || delayMinutes > 0) 
-                            ? "bg-error-container/10 border-error/30 hover:shadow-md" 
-                            : "bg-surface-container-lowest border-outline-variant/20 hover:border-primary/30 hover:shadow-md";
-                        const sideColorClass = isCompleted ? "bg-outline-variant/50" : (isNoShow || delayMinutes > 0) ? "bg-error" : "bg-primary";
-
-                        return (
-                        <div key={app.id} className={`${cardBaseClass} ${cardStatusClass}`}>
-                          <div className={`absolute top-0 left-0 bottom-0 w-1.5 rounded-l-2xl ${sideColorClass}`}></div>
-                          <div className="pl-2">
-                            <div className="flex justify-between items-start mb-3">
-                              <div className="flex flex-wrap items-center gap-2">
-                                <span className={`material-symbols-outlined text-[18px] ${isCompleted ? 'text-outline-variant' : (isNoShow || delayMinutes > 0) ? 'text-error' : 'text-primary'}`}>{isCompleted ? 'check_circle' : isNoShow ? 'event_busy' : delayMinutes > 0 ? 'warning' : 'schedule'}</span>
-                                <span className={`text-xl font-headline font-bold leading-none ${isCompleted ? 'text-outline-variant line-through' : (isNoShow || delayMinutes > 0) ? 'text-error' : 'text-primary'}`}>{app.time}</span>
-                                {isCompleted && <span className="bg-surface-container-highest text-on-surface-variant border border-outline-variant/20 text-[9px] px-2 py-0.5 rounded uppercase font-bold tracking-widest">Concluído</span>}
-                                {isNoShow && <span className="bg-error/10 text-error text-[9px] px-2 py-0.5 rounded uppercase font-bold tracking-widest">Falta</span>}
-                                {delayMinutes > 0 && <span className="bg-error/10 text-error text-[9px] px-2 py-0.5 rounded uppercase font-bold tracking-widest">{delayMinutes}m atraso</span>}
-                              </div>
-                              <div className="flex gap-1">
-                                {!isCompleted && (
-                                  <button 
-                                    onClick={() => { onCompleteAppointment(app.id); setToastMessage('Agendamento concluído!'); setTimeout(() => setToastMessage(null), 3000); }}
-                                    className="text-on-surface-variant hover:text-primary hover:bg-primary-container/20 p-2 rounded-full transition-colors"
-                                    title="Marcar como concluído"
-                                  ><span className="material-symbols-outlined text-[20px]">check_circle</span></button>
-                                )}
-                                <button 
-                                  onClick={() => {
-                                    setEditingAppointmentId(app.id); setEditBookName(app.clientName);
-                                    setEditBookPhone(app.contact && app.contact !== 'Não informado' ? formatPhone(app.contact) : '');
-                                    setEditBookDate(app.date); setEditBookTime(app.time);
-                                    setEditBookEmp(app.assignedEmployeeId); setEditBookService(app.services || []);
-                                    setEditBookHighBloodPressure(appSpecialNeeds.includes('Pressão Alta'));
-                                    setEditBookPregnant(appSpecialNeeds.includes('Gravidez'));
-                                    setEditBookDetails(appNotes);
-                                  }}
-                                  className="text-on-surface-variant hover:text-primary hover:bg-primary-container/20 p-2 rounded-full transition-colors"
-                                  title="Editar horário e dados"
-                                ><span className="material-symbols-outlined text-[20px]">edit</span></button>
-                                <button 
-                                  onClick={() => setAppointmentToDelete(app.id)}
-                                  className="text-on-surface-variant hover:text-error hover:bg-error-container/20 p-2 rounded-full transition-colors"
-                                  title="Cancelar agendamento"
-                                ><span className="material-symbols-outlined text-[20px]">cancel</span></button>
-                                <div className="flex bg-surface-container-low rounded-full ml-1 border border-outline-variant/10 overflow-hidden">
-                                  <button 
-                                    onClick={() => handleSendReceiptWhatsApp(app, emp.name)}
-                                    className="text-on-surface-variant hover:text-[#25D366] hover:bg-[#25D366]/10 p-2 rounded-full transition-colors"
-                                    title="Enviar Comprovante via WhatsApp"
-                                  ><span className="material-symbols-outlined text-[20px]">send_to_mobile</span></button>
-                                  <button 
-                                    onClick={() => handlePrintAppointment(app, emp.name, 'a4')}
-                                    className="text-on-surface-variant hover:text-primary hover:bg-primary-container/20 p-2 rounded-full transition-colors"
-                                    title="Imprimir em A4"
-                                  ><span className="material-symbols-outlined text-[20px]">print</span></button>
-                                  <button 
-                                    onClick={() => handlePrintAppointment(app, emp.name, 'thermal')}
-                                    className="text-on-surface-variant hover:text-primary hover:bg-primary-container/20 p-2 rounded-full transition-colors"
-                                    title="Imprimir Cupom Térmico (Bobina)"
-                                  ><span className="material-symbols-outlined text-[20px]">receipt_long</span></button>
-                                </div>
-                              </div>
-                            </div>
-                            <h5 className="font-bold text-on-surface text-sm mb-1">{app.clientName}</h5>
-                            <p className="text-xs text-on-surface-variant line-clamp-2 mb-4" title={app.services.join(', ')}>
-                              {app.services.join(', ')}
-                            </p>
-                            {appSpecialNeeds.length > 0 && (
-                              <div className="flex flex-wrap gap-1 mb-2">
-                                {appSpecialNeeds.map((need: string) => (
-                                  <span key={need} className="bg-error/10 text-error text-[9px] px-2 py-0.5 rounded uppercase font-bold tracking-widest flex items-center gap-1">
-                                    <span className="material-symbols-outlined text-[10px]">medical_services</span>
-                                    {need}
-                                  </span>
-                                ))}
-                              </div>
-                            )}
-                            {appNotes && (
-                              <p className="text-[10px] text-on-surface-variant mb-4 italic border-l-2 border-outline-variant/30 pl-2 line-clamp-2" title={appNotes}>
-                                "{appNotes}"
-                              </p>
-                            )}
-                            {!isCompleted && (
-                              <div className="pt-3 border-t border-outline-variant/10">
-                                <label className="text-[9px] font-bold text-outline uppercase tracking-widest block mb-2">Realocar para:</label>
-                                <select 
-                                  value={app.assignedEmployeeId}
-                                  onChange={(e) => onReassign(app.id, e.target.value)}
-                                  className="w-full bg-surface-container-low border border-outline-variant/20 text-xs rounded-xl px-3 py-2 focus:ring-1 focus:ring-primary text-on-surface-variant cursor-pointer transition-colors hover:border-primary/50"
-                                >
-                                  {employees.map(e => (
-                                    <option key={e.id} value={e.id}>{e.name}</option>
-                                  ))}
-                                </select>
-                              </div>
-                            )}
-                            {(isNoShow || delayMinutes >= 15) && (
-                               <button 
-                                 onClick={() => setAppointmentToDelete(app.id)}
-                                 className="w-full mt-3 flex items-center justify-center gap-1 bg-error/10 hover:bg-error/20 text-error py-2 rounded-xl text-[10px] font-bold uppercase transition-colors"
-                               >
-                                 <span className="material-symbols-outlined text-[14px]">event_busy</span>
-                                 {isNoShow ? 'Excluir Agendamento' : 'Excluir Falta (Atraso)'}
-                               </button>
-                            )}
-                          </div>
+                  {/* Área Deslizante da Timeline */}
+                  <div 
+                    className="flex flex-1 overflow-y-auto overflow-x-auto relative custom-scrollbar" 
+                    ref={bodyScrollRef}
+                    onScroll={(e) => {
+                      if (headerScrollRef.current) {
+                        headerScrollRef.current.scrollLeft = e.currentTarget.scrollLeft;
+                      }
+                    }}
+                  >
+                    {/* Coluna Fixa das Horas (Sticky lateral) */}
+                    <div className="w-14 shrink-0 bg-surface-container-lowest/95 backdrop-blur border-r border-outline-variant/20 sticky left-0 z-20 flex flex-col">
+                      {timelineHours.map(hour => (
+                        <div key={hour} className="relative w-full" style={{ height: HOUR_HEIGHT }}>
+                          <span className="absolute -top-2.5 right-2 text-[10px] font-bold text-on-surface-variant bg-surface-container-lowest px-1">
+                            {hour.toString().padStart(2, '0')}:00
+                          </span>
                         </div>
-                      );
-                      })}
+                      ))}
+                    </div>
+
+                    {/* Malha de Fundo (Linhas horizontais) */}
+                    <div className="absolute inset-0 left-14 flex flex-col pointer-events-none z-0 min-w-max">
+                      {timelineHours.map(hour => (
+                        <div key={hour} className="w-full border-b border-outline-variant/10" style={{ height: HOUR_HEIGHT }}></div>
+                      ))}
+                    </div>
+
+                    {/* Linha Vermelha de Tempo Real */}
+                    {isTodayView && currentMinuteTop >= 0 && currentMinuteTop <= ((END_HOUR - START_HOUR) * HOUR_HEIGHT) && (
+                      <div className="absolute left-14 right-0 z-10 pointer-events-none flex items-center min-w-max" style={{ top: currentMinuteTop }}>
+                        <div className="w-2 h-2 rounded-full bg-error -ml-1"></div>
+                        <div className="h-[2px] w-full bg-error/70"></div>
                       </div>
                     )}
-                  </>
+
+                    {/* Colunas Relativas Clicáveis dos Profissionais */}
+                    <div className="flex flex-1 z-10 min-w-max">
+                      {activeEmployees.map(emp => (
+                        <EmployeeScheduleColumn
+                          key={emp.id}
+                          emp={emp}
+                          receptionDate={receptionDate}
+                          scheduleSearchTerm={scheduleSearchTerm}
+                          appointments={appointments}
+                          services={services}
+                          START_HOUR={START_HOUR}
+                          END_HOUR={END_HOUR}
+                          MINUTE_HEIGHT={MINUTE_HEIGHT}
+                          HOUR_HEIGHT={HOUR_HEIGHT}
+                          isTodayView={isTodayView}
+                          currentMinute={currentMinute}
+                          todayStr={todayStr}
+                          onGridClick={handleGridClick}
+                          onDeleteBloqueio={onDeleteBloqueio}
+                          onCompleteAppointment={onCompleteAppointment}
+                          onEditAppointmentClick={handleEditAppointmentClick}
+                          onDeleteAppointmentClick={handleDeleteAppointmentClick}
+                          setToastMessage={setToastMessage}
+                        />
+                      ))}
+                    </div>
+                  </div>
                 </div>
               );
-            })}
+            })()}
           </div>
         </motion.div>
       )}
 
       {activeTab === 'equipe' && (
-        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
-          <div className="lg:col-span-2 flex flex-col gap-6">
-            {employees.length === 0 ? (
-              <div className="text-center py-16 bg-surface-container-lowest rounded-3xl border border-outline-variant/10 shadow-sm w-full">
-                <span className="material-symbols-outlined text-4xl text-outline-variant mb-4">group_off</span>
-                <p className="text-on-surface-variant text-sm font-medium">Nenhum colaborador cadastrado no momento.</p>
-              </div>
-            ) : (
-              <>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 content-start">
-                  {employees.slice((employeeCurrentPage - 1) * EMPLOYEES_PER_PAGE, employeeCurrentPage * EMPLOYEES_PER_PAGE).map(emp => (
-                    <div key={emp.id} className="bg-surface-container-lowest p-5 rounded-3xl border border-outline-variant/10 shadow-sm flex flex-col gap-4 h-fit">
-                      <div className="flex items-center gap-4 min-w-0">
-                        <img src={emp.avatar} alt={emp.name} className="w-14 h-14 rounded-full object-cover border-2 border-primary/20 shrink-0" />
-                        <div className="min-w-0 flex-1">
-                          <h4 className="text-base font-bold text-on-surface flex items-center gap-2 truncate">
-                            {emp.name}
-                            {emp.role === 'supervisor' && (
-                              <span className="material-symbols-outlined text-[14px] text-primary shrink-0" title="Supervisor">shield_person</span>
-                            )}
-                          </h4>
-                          <p className="text-[10px] uppercase tracking-widest text-on-surface-variant mt-1 truncate">{emp.specialty}</p>
-                          <p className="text-xs text-on-surface-variant mt-1 truncate">{emp.email}</p>
-                        </div>
-                      </div>
-                      <div className="flex gap-2 justify-end border-t border-outline-variant/10 pt-3">
-                        <button
-                          onClick={() => setViewingEmployee(emp)}
-                          className="p-2 text-on-surface-variant hover:text-primary hover:bg-primary-container/20 rounded-full transition-colors"
-                          title="Ver histórico e detalhes"
-                        >
-                          <span className="material-symbols-outlined text-[22px]">history</span>
-                        </button>
-                        <button
-                          onClick={() => {
-                            setEditingEmployeeId(emp.id);
-                            setNewEmpName(emp.name);
-                            setNewEmpEmail(emp.email);
-                            setNewEmpSpecialty(emp.specialty);
-                            setNewEmpRole(emp.role as 'supervisor' | 'collaborator' | 'receptionist');
-                          }}
-                          className="p-2 text-on-surface-variant hover:text-primary hover:bg-primary-container/20 rounded-full transition-colors"
-                          title="Editar profissional"
-                        >
-                          <span className="material-symbols-outlined text-[22px]">edit</span>
-                        </button>
-                        <button
-                          onClick={() => setEmployeeToDelete(emp.id)}
-                          className="p-2 text-on-surface-variant hover:text-error hover:bg-error-container/20 rounded-full transition-colors"
-                          title="Excluir profissional"
-                        >
-                          <span className="material-symbols-outlined text-[22px]">delete</span>
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-                
-                {Math.ceil(employees.length / EMPLOYEES_PER_PAGE) > 1 && (
-                  <div className="flex justify-center items-center gap-4 mt-2">
-                    <button 
-                      disabled={employeeCurrentPage === 1} 
-                      onClick={() => setEmployeeCurrentPage(p => p - 1)}
-                      className="p-2 rounded-full border border-outline-variant/20 text-on-surface-variant disabled:opacity-30 disabled:cursor-not-allowed hover:bg-surface-container transition-colors flex items-center justify-center"
-                    >
-                      <span className="material-symbols-outlined">chevron_left</span>
-                    </button>
-                    <span className="text-xs text-on-surface-variant font-medium">
-                      Página {employeeCurrentPage} de {Math.ceil(employees.length / EMPLOYEES_PER_PAGE)}
-                    </span>
-                    <button 
-                      disabled={employeeCurrentPage === Math.ceil(employees.length / EMPLOYEES_PER_PAGE)} 
-                      onClick={() => setEmployeeCurrentPage(p => p + 1)}
-                      className="p-2 rounded-full border border-outline-variant/20 text-on-surface-variant disabled:opacity-30 disabled:cursor-not-allowed hover:bg-surface-container transition-colors flex items-center justify-center"
-                    >
-                      <span className="material-symbols-outlined">chevron_right</span>
-                    </button>
-                  </div>
-                )}
-              </>
-            )}
-          </div>
-          
-          <div className="bg-surface-container-low p-8 rounded-3xl border border-outline-variant/20 h-fit">
-            <h3 className="text-lg font-headline text-primary mb-6">{editingEmployeeId ? 'Editar Colaborador' : 'Adicionar Colaborador'}</h3>
-            <form onSubmit={handleAddEmployee} className="space-y-4">
-              <div>
-                <label className="block text-[10px] font-bold text-on-surface-variant tracking-[0.15em] uppercase mb-2">Nome Completo</label>
-                <input required type="text" value={newEmpName} onChange={e => setNewEmpName(e.target.value)} className="w-full bg-surface-container-lowest border border-outline-variant/20 rounded-xl p-3 focus:ring-1 focus:ring-primary text-sm transition-all" placeholder="Ex: João Silva" />
-              </div>
-              <div>
-                <label className="block text-[10px] font-bold text-on-surface-variant tracking-[0.15em] uppercase mb-2">Especialidade</label>
-                <input required type="text" value={newEmpSpecialty} onChange={e => setNewEmpSpecialty(e.target.value)} className="w-full bg-surface-container-lowest border border-outline-variant/20 rounded-xl p-3 focus:ring-1 focus:ring-primary text-sm transition-all" placeholder="Ex: Massoterapia" />
-              </div>
-              <div>
-                <label className="block text-[10px] font-bold text-on-surface-variant tracking-[0.15em] uppercase mb-2">Papel / Acesso</label>
-                <select 
-                  value={newEmpRole} 
-                  onChange={e => setNewEmpRole(e.target.value as 'supervisor' | 'collaborator' | 'receptionist')} 
-                  className="w-full bg-surface-container-lowest border border-outline-variant/20 rounded-xl p-3 focus:ring-1 focus:ring-primary text-sm transition-all text-on-surface"
-                >
-                  <option value="collaborator">Colaborador (Agenda padrão)</option>
-                  <option value="receptionist">Recepcionista (Gestão de Escala)</option>
-                  <option value="supervisor">Supervisor (Acesso Total)</option>
-                </select>
-              </div>
-              {!editingEmployeeId && (
-                <div className="bg-surface-container-lowest p-3 rounded-xl border border-outline-variant/20 mt-2">
-                  <p className="text-xs text-on-surface-variant text-center">O e-mail de acesso será gerado com base no nome. A senha padrão é: <strong className="text-on-surface">123456</strong></p>
-                </div>
-              )}
-              <button disabled={isSubmitting} type="submit" className={`w-full mt-4 bg-primary text-on-primary py-3 rounded-xl font-bold text-xs uppercase tracking-[0.2em] shadow-sm hover:bg-primary-dim transition-all ${isSubmitting ? 'opacity-70 cursor-not-allowed' : 'active:scale-[0.98]'}`}>
-                {isSubmitting ? 'Salvando...' : (editingEmployeeId ? 'Salvar Alterações' : 'Cadastrar')}
-              </button>
-              {editingEmployeeId && (
-                <button type="button" onClick={cancelEdit} className="w-full mt-2 text-xs font-bold text-on-surface-variant uppercase tracking-widest hover:text-on-surface transition-colors py-2">
-                  Cancelar Edição
-                </button>
-              )}
-            </form>
-          </div>
-        </motion.div>
+        <SupervisorEquipeTab
+          employees={employees}
+          onAddEmployee={onAddEmployee}
+          onDeleteEmployee={onDeleteEmployee}
+          onEditEmployee={onEditEmployee}
+          setToastMessage={setToastMessage}
+          setErrorMessage={setErrorMessage}
+        />
       )}
 
       {/* NOVA ABA: MENU DE SERVIÇOS (Inspirada no HTML enviado) */}
@@ -1086,11 +1067,22 @@ export function SupervisorView({ employees, appointments, services, clients, onR
                 <h2 className="text-2xl font-headline text-primary">Novo Agendamento</h2>
                 <button onClick={() => setShowNewBookingModal(false)} className="p-2 hover:bg-surface-container rounded-full text-on-surface-variant"><span className="material-symbols-outlined">close</span></button>
               </div>
-              <form onSubmit={handleQuickBook} className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              
+            <form onSubmit={handleQuickBook} className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-[10px] font-bold text-on-surface-variant tracking-[0.15em] uppercase mb-2">Cliente</label>
-                    <input required list="client-list" type="text" value={bookName} onChange={e => setBookName(e.target.value)} className="w-full bg-surface-container-low border border-outline-variant/20 rounded-xl p-3 focus:ring-1 focus:ring-primary text-sm" placeholder="Digite ou selecione..." autoComplete="off" />
+                    <input required list="client-list" type="text" value={bookName} onChange={e => {
+                    const newName = e.target.value;
+                    setBookName(newName);
+                    const selClient = clients.find(c => c.nome.toLowerCase() === newName.toLowerCase().trim());
+                    if (selClient) {
+                      setBookPhone(selClient.telefone || '');
+                      setBookClientObservation(selClient.observacao || '');
+                    } else {
+                      setBookClientObservation('');
+                    }
+                  }} className="w-full bg-surface-container-low border border-outline-variant/20 rounded-xl p-3 focus:ring-1 focus:ring-primary text-sm" placeholder="Digite ou selecione..." autoComplete="off" />
                   </div>
                   <div>
                     <label className="block text-[10px] font-bold text-on-surface-variant tracking-[0.15em] uppercase mb-2">Telefone / WhatsApp</label>
@@ -1128,27 +1120,96 @@ export function SupervisorView({ employees, appointments, services, clients, onR
                     {employees.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
                   </select>
                 </div>
-                <div className="border-t border-outline-variant/20 pt-4 mt-4">
-                  <label className="block text-[10px] font-bold text-primary tracking-[0.15em] uppercase mb-3">Saúde e Observações (Recepção)</label>
-                  <div className="flex gap-4 mb-3">
-                    <label className="flex items-center gap-2 text-xs text-on-surface-variant cursor-pointer">
-                      <input type="checkbox" checked={bookHighBloodPressure} onChange={e => setBookHighBloodPressure(e.target.checked)} className="rounded border-outline-variant/30 text-primary focus:ring-primary bg-surface-container-lowest" />
-                      Pressão Alta
+              <div className="border-t border-outline-variant/20 pt-4 mt-4">
+                {clients.some(c => c.nome.toLowerCase() === bookName.toLowerCase().trim()) && (
+                  <div className="mb-4">
+                    <label className="block text-[10px] font-bold text-secondary tracking-[0.15em] uppercase mb-2 flex items-center gap-1">
+                      <span className="material-symbols-outlined text-[14px]">stars</span>
+                      Recomendações / Perfil Clínico Fixo
                     </label>
-                    <label className="flex items-center gap-2 text-xs text-on-surface-variant cursor-pointer">
-                      <input type="checkbox" checked={bookPregnant} onChange={e => setBookPregnant(e.target.checked)} className="rounded border-outline-variant/30 text-primary focus:ring-primary bg-surface-container-lowest" />
-                      Gravidez
-                    </label>
+                    <textarea rows={2} value={bookClientObservation} onChange={e => setBookClientObservation(e.target.value)} className="w-full bg-secondary-container/30 border border-secondary/20 rounded-xl p-3 focus:ring-1 focus:ring-secondary text-sm resize-none text-on-surface" placeholder="Informações que ficarão salvas para sempre no histórico do paciente (Ex: Possui Pinos, Cirurgias Anteriores, etc)." />
                   </div>
-                  <div>
-                    <label className="block text-[10px] font-bold text-on-surface-variant tracking-[0.15em] uppercase mb-2">Detalhes / Observações</label>
+                )}
+                <div>
+                  <div className="flex justify-between items-center mb-2">
+                    <label className="block text-[10px] font-bold text-on-surface-variant tracking-[0.15em] uppercase">Detalhes deste Agendamento</label>
+                      <button 
+                        type="button" 
+                        onClick={() => setShowAnamnese(true)}
+                        className={`text-[10px] font-bold uppercase tracking-widest px-2 py-1 rounded transition-colors bg-surface-container text-on-surface-variant hover:bg-surface-container-high`}
+                      >
+                        + Ficha de Anamnese
+                      </button>
+                    </div>
                     <textarea rows={4} value={bookDetails} onChange={e => setBookDetails(e.target.value)} className="w-full bg-surface-container-low border border-outline-variant/20 rounded-xl p-3 focus:ring-1 focus:ring-primary text-sm min-h-[120px] resize-none" placeholder="Ex: Cliente prefere atendimento mais leve, restrições, etc." />
                   </div>
                 </div>
-                <button type="submit" className="w-full mt-4 bg-primary text-on-primary py-3 rounded-xl font-bold text-xs uppercase tracking-[0.2em] shadow-sm hover:bg-primary-dim transition-all">Confirmar Agendamento</button>
+                <button disabled={isAddingAppointment} type="submit" className={`w-full mt-4 bg-primary text-on-primary py-3 rounded-xl font-bold text-xs uppercase tracking-[0.2em] shadow-sm hover:bg-primary-dim transition-all ${isAddingAppointment ? 'opacity-70 cursor-not-allowed' : 'active:scale-[0.98]'}`}>
+                  {isAddingAppointment ? 'Salvando...' : 'Confirmar Agendamento'}
+                </button>
               </form>
             </motion.div>
           </div>
+        )}
+
+        {/* Modal de Próximos Agendamentos */}
+      <UpcomingAppointmentsModal
+        open={showUpcomingAppointments}
+        appointments={appointments}
+        employees={employees}
+        services={services}
+        onClose={() => setShowUpcomingAppointments(false)}
+      />
+
+      {/* Modal Independente de Bloqueio */}
+        {showNewBlockModal && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="bg-surface-container-lowest p-8 rounded-3xl shadow-xl max-w-lg w-full border border-outline-variant/20 max-h-[90vh] overflow-y-auto">
+              <div className="flex justify-between items-center mb-6">
+                <h2 className="text-2xl font-headline text-error">Novo Bloqueio / Falta</h2>
+                <button onClick={() => setShowNewBlockModal(false)} className="p-2 hover:bg-surface-container rounded-full text-on-surface-variant"><span className="material-symbols-outlined">close</span></button>
+              </div>
+              <form onSubmit={handleBlockSubmit} className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                     <div>
+                       <label className="block text-[10px] font-bold text-on-surface-variant tracking-[0.15em] uppercase mb-2">Data do Bloqueio</label>
+                       <input type="date" value={receptionDate} disabled className="w-full bg-surface-container-low border border-outline-variant/20 rounded-xl p-3 text-sm opacity-50 cursor-not-allowed text-on-surface font-bold" />
+                     </div>
+                     <div>
+                       <label className="block text-[10px] font-bold text-on-surface-variant tracking-[0.15em] uppercase mb-2">Profissional Ausente</label>
+                       <select required value={bookEmp} onChange={e => setBookEmp(e.target.value)} className="w-full bg-surface-container-low border border-outline-variant/20 rounded-xl p-3 focus:ring-1 focus:ring-primary text-sm">
+                         <option value="" disabled>Selecione...</option>
+                         {employees.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
+                       </select>
+                     </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                     <div>
+                       <label className="block text-[10px] font-bold text-on-surface-variant tracking-[0.15em] uppercase mb-2">Hora Início</label>
+                       <input required type="time" min="09:00" max="21:00" value={bookTime} onChange={e => setBookTime(e.target.value)} className="w-full bg-surface-container-low border border-outline-variant/20 rounded-xl p-3 focus:ring-1 focus:ring-primary text-sm" />
+                     </div>
+                     <div>
+                       <label className="block text-[10px] font-bold text-on-surface-variant tracking-[0.15em] uppercase mb-2">Hora Fim</label>
+                       <input required type="time" min={bookTime || "09:00"} max="21:00" value={blockEndTime} onChange={e => setBlockEndTime(e.target.value)} className="w-full bg-surface-container-low border border-outline-variant/20 rounded-xl p-3 focus:ring-1 focus:ring-primary text-sm" />
+                     </div>
+                  </div>
+                  <div>
+                     <label className="block text-[10px] font-bold text-on-surface-variant tracking-[0.15em] uppercase mb-2">Motivo (Falta, Pausa, Reunião)</label>
+                     <input required type="text" value={blockReason} onChange={e => setBlockReason(e.target.value)} className="w-full bg-surface-container-low border border-outline-variant/20 rounded-xl p-3 focus:ring-1 focus:ring-primary text-sm" placeholder="Ex: Saiu mais cedo, Almoço..." />
+                  </div>
+                  <button type="submit" className="w-full mt-4 bg-error text-onError py-3 rounded-xl font-bold text-xs uppercase tracking-[0.2em] shadow-sm hover:bg-error/90 transition-all text-white">Salvar Bloqueio / Falta</button>
+                </form>
+            </motion.div>
+          </div>
+        )}
+
+        {/* Floating Anamnese Modal */}
+        {showAnamnese && (
+          <AnamneseForm 
+            data={anamneseData} 
+            onChange={setAnamneseData} 
+            onClose={() => setShowAnamnese(false)} 
+          />
         )}
 
         {/* Modal de Edição de Agendamento */}
@@ -1211,17 +1272,6 @@ export function SupervisorView({ employees, appointments, services, clients, onR
               </div>
                 </div>
                 <div className="border-t border-outline-variant/20 pt-4 mt-4">
-                  <label className="block text-[10px] font-bold text-primary tracking-[0.15em] uppercase mb-3">Saúde e Observações (Recepção)</label>
-                  <div className="flex gap-4 mb-3">
-                    <label className="flex items-center gap-2 text-xs text-on-surface-variant cursor-pointer">
-                      <input type="checkbox" checked={editBookHighBloodPressure} onChange={e => setEditBookHighBloodPressure(e.target.checked)} disabled={isEditingCompleted} className="rounded border-outline-variant/30 text-primary focus:ring-primary bg-surface-container-lowest" />
-                      Pressão Alta
-                    </label>
-                    <label className="flex items-center gap-2 text-xs text-on-surface-variant cursor-pointer">
-                      <input type="checkbox" checked={editBookPregnant} onChange={e => setEditBookPregnant(e.target.checked)} disabled={isEditingCompleted} className="rounded border-outline-variant/30 text-primary focus:ring-primary bg-surface-container-lowest" />
-                      Gravidez
-                    </label>
-                  </div>
                   <div>
                     <label className="block text-[10px] font-bold text-on-surface-variant tracking-[0.15em] uppercase mb-2">Detalhes / Observações</label>
                     <textarea rows={4} value={editBookDetails} onChange={e => setEditBookDetails(e.target.value)} disabled={isEditingCompleted} className={`w-full bg-surface-container-low border border-outline-variant/20 rounded-xl p-3 focus:ring-1 focus:ring-primary text-sm min-h-[120px] resize-none ${isEditingCompleted ? 'opacity-50 cursor-not-allowed' : ''}`} placeholder="Ex: Cliente prefere atendimento mais leve, restrições, etc." />
@@ -1502,7 +1552,6 @@ export function SupervisorView({ employees, appointments, services, clients, onR
                   <p className="text-[10px] font-bold text-outline uppercase tracking-widest">Nível de Acesso</p>
                   <p className="text-sm font-bold text-on-surface mt-0.5 capitalize">{
                     createdEmployeeInfo.role === 'supervisor' ? 'Supervisor (Acesso Total)' : 
-                    createdEmployeeInfo.role === 'receptionist' ? 'Recepcionista (Gestão de Escala)' : 
                     'Colaborador (Agenda Padrão)'
                   }</p>
                 </div>

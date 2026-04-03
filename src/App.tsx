@@ -1,13 +1,22 @@
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { flushSync } from 'react-dom';
 import { Layout } from './components/Layout';
+import { useQueryClient } from '@tanstack/react-query';
 import { CollaboratorView } from './components/CollaboratorView';
+import { useAuth } from './AuthContext';
 import { SupervisorView } from './components/SupervisorView';
-import { ReceptionistView } from './components/Recepcionista';
 import { LoginView } from './components/LoginView';
 import { TVPanelView } from './components/TVPanelView';
 import io from 'socket.io-client';
-import { Employee, Appointment } from './types';
+import { getSocketUrl } from './config/api';
+import { Employee, Appointment, Service, Client } from './types'; // Tipos mais fortes
+import {
+  useAppointments, useAddAppointment, useCompleteAppointment, useReassignAppointment, useEditAppointment, useDeleteAppointment,
+  useEmployees, useAddEmployee, useDeleteEmployee, useEditEmployee,
+  useServices, useAddService, useEditService, useDeleteService,
+  useClients, useEditClient, useDeleteClient,
+  useAddBloqueio, useDeleteBloqueio
+} from './api'; // Importando os novos hooks
 
 const ADMIN_USER: Employee = {
   id: 'admin',
@@ -17,21 +26,31 @@ const ADMIN_USER: Employee = {
   specialty: 'Gestão',
   avatar: 'https://api.dicebear.com/7.x/notionists/svg?seed=Diretoria',
   rating: 5.0,
-  completedServices: 0
+  completedServices: 0,
+  diasTrabalho: '1,2,3,4,5,6',
+  bloqueios: []
 };
 
-// Usa dinamicamente o mesmo IP de onde a página está sendo acessada na rede local.
-const API_URL = `http://${window.location.hostname}:3333`; 
-
 export default function App() {
-  const [currentUser, setCurrentUser] = useState<Employee | null>(null);
-  const [employees, setEmployees] = useState<Employee[]>([ADMIN_USER]);
-  const [appointments, setAppointments] = useState<Appointment[]>([]);
-  const [loginError, setLoginError] = useState<string | null>(null);
-  const [activeRoleView, setActiveRoleView] = useState<'supervisor' | 'collaborator' | 'receptionist' | 'tv'>('collaborator');
-  const [token, setToken] = useState<string | null>(localStorage.getItem('spa_token'));
-  const [services, setServices] = useState<any[]>([]);
-  const [clients, setClients] = useState<any[]>([]);
+  const { currentUser, token, loginError, handleLogin, handleLogout } = useAuth();
+  const queryClient = useQueryClient();
+  const [isPublicTVMode, setIsPublicTVMode] = useState(false);
+
+  // 1. SUBSTITUIÇÃO DOS ESTADOS MANUAIS PELOS HOOKS DO REACT QUERY
+  // Os dados, loading e erros agora são gerenciados automaticamente.
+  const { data: employeesData, isLoading: loadingEmployees, isError: errorEmployees } = useEmployees(token);
+  const { data: appointmentsData, isLoading: loadingAppointments, isError: errorAppointments } = useAppointments(token);
+  const { data: services, isLoading: loadingServices, isError: errorServices } = useServices(token);
+  const { data: clients, isLoading: loadingClients, isError: errorClients } = useClients(token);
+
+  // Adicionamos o usuário admin manualmente à lista vinda da API
+  const employees = useMemo(() => (employeesData ? [ADMIN_USER, ...employeesData] : [ADMIN_USER]), [employeesData]);
+  const appointments = useMemo(() => appointmentsData || [], [appointmentsData]);
+
+  const [activeRoleView, setActiveRoleView] = useState<'supervisor' | 'collaborator' | 'tv'>('collaborator');
+
+  // Atualiza a View de segurança baseada no cargo toda vez que o currentUser mudar
+  useEffect(() => { if (currentUser) setActiveRoleView(currentUser.role); }, [currentUser]);
 
   // Estado do Tema (Modo Escuro/Claro) com persistência no navegador
   const [isDarkMode, setIsDarkMode] = useState<boolean>(() => {
@@ -77,479 +96,90 @@ export default function App() {
     }
   };
 
-  // FUNÇÃO ÚNICA PARA BUSCAR TODOS OS DADOS EM TEMPO REAL
-  const loadAllData = useCallback(async () => {
-    if (!token) return; // Só busca dados se estiver logado com token
+  useEffect(() => {
+    const handleWindowError = (event: ErrorEvent) => {
+      console.error('[FRONTEND][UNCAUGHT_ERROR]', {
+        message: event.message,
+        file: event.filename,
+        line: event.lineno,
+        column: event.colno,
+        stack: event.error instanceof Error ? event.error.stack : undefined,
+      });
+    };
 
-    
-    const headers = { 'Authorization': `Bearer ${token}` };
+    const handleUnhandledRejection = (event: PromiseRejectionEvent) => {
+      console.error('[FRONTEND][UNHANDLED_REJECTION]', {
+        reason: event.reason,
+      });
+    };
 
-    try {
-      // Adicionando um fallback (.catch) individual para impedir que uma falha de rede derrube todo o carregamento
-      const [colabRes, agenRes, servRes, cliRes] = await Promise.all([
-        fetch(`${API_URL}/api/colaboradores`, { cache: 'no-store', headers }).catch(() => null),
-        fetch(`${API_URL}/api/agendamentos`, { cache: 'no-store', headers }).catch(() => null),
-        fetch(`${API_URL}/api/servicos`, { headers }).catch(() => null),
-        fetch(`${API_URL}/api/clientes`, { headers }).catch(() => null)
-      ]);
+    window.addEventListener('error', handleWindowError);
+    window.addEventListener('unhandledrejection', handleUnhandledRejection);
 
-      if (colabRes && colabRes.ok) {
-        const data = await colabRes.json();
-        const formatados = data.map((colab: any) => ({
-          id: String(colab.id),
-          name: colab.nome || 'Usuário',
-          email: colab.email || `${(colab.nome || 'usuario').toLowerCase().split(' ')[0]}@serenidade.com`,
-          role: colab.papel || 'collaborator',
-          specialty: colab.especialidade,
-          avatar: `https://api.dicebear.com/7.x/notionists/svg?seed=${colab.nome || 'usuario'}`,
-          rating: 5.0,
-          completedServices: 0
-        }));
-        setEmployees([ADMIN_USER, ...formatados]);
-      }
-
-      if (agenRes && agenRes.ok) {
-        const data = await agenRes.json();
-        const formatados = data.map((ag: any) => {
-          let dateStr = new Date().toISOString().split('T')[0];
-          let timeStr = '12:00';
-          const dataObj = new Date(ag.data);
-          if (!isNaN(dataObj.getTime())) { // Proteção contra datas inválidas no banco
-            dateStr = dataObj.toISOString().split('T')[0];
-            timeStr = dataObj.toISOString().split('T')[1].substring(0, 5);
-          }
-          return {
-            id: String(ag.id),
-            clientName: ag.cliente?.nome || 'Cliente não encontrado',
-            contact: ag.cliente?.telefone || 'Não informado',
-            services: ag.servicos ? ag.servicos.map((s: any) => s.nome) : ['Serviço Padrão'],
-            date: dateStr,
-            time: timeStr,
-            guests: 1,
-            specialNeeds: [],
-            assignedEmployeeId: String(ag.colaboradorId),
-            status: ag.status || 'scheduled'
-          };
-        });
-        setAppointments(formatados);
-      }
-
-      if (servRes && servRes.ok) setServices(await servRes.json());
-      if (cliRes && cliRes.ok) setClients(await cliRes.json());
-      
-    } catch (err) {
-      console.error("Erro ao realizar sincronização no banco:", err);
-    }
-  }, [token]);
+    return () => {
+      window.removeEventListener('error', handleWindowError);
+      window.removeEventListener('unhandledrejection', handleUnhandledRejection);
+    };
+  }, []);
 
   // ATIVA AS BUSCAS INICIAIS E O WEBSOCKET
   useEffect(() => {
-    loadAllData();
-    const socket = io(API_URL);
-    socket.on('db_updated', () => loadAllData()); 
+    // Só conecta o socket e busca dados caso o usuário tenha um token (esteja logado)
+    if (!token) return;
+
+    const socket = io(getSocketUrl());
+    // Agora, o WebSocket apenas notifica o React Query para invalidar os caches.
+    // Ele se encarrega de refazer as buscas necessárias de forma otimizada.
+    socket.on('db_updated', () => {
+      console.log('🔄 WebSocket: Invalidação de cache recebida.');
+      queryClient.invalidateQueries(); // Invalida TODOS os caches
+    }); 
+    
     return () => { socket.disconnect(); };
-  }, [token, loadAllData]); // loadAllData adicionado para evitar stale closures
+  }, [token, queryClient]);
 
-  // 3. FUNÇÃO DE LOGIN
-  const handleLogin = useCallback(async (email: string, pass: string) => {
-    try {
-      const response = await fetch(`${API_URL}/api/login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, senha: pass })
-      });
+  // 2. SUBSTITUIÇÃO DAS FUNÇÕES DE CALLBACK PELAS MUTAÇÕES DO REACT QUERY
+  // A lógica de 'fetch', 'try/catch', e 'setEstado' é abstraída para dentro dos hooks.
+  // O componente apenas chama a função 'mutateAsync'. O 'onSuccess' nos hooks cuida da atualização da UI.
+  const { mutateAsync: addAppointment, isPending: isAddingAppointment } = useAddAppointment(token);
+  const { mutateAsync: completeAppointment } = useCompleteAppointment(token);
+  const { mutateAsync: reassignAppointment } = useReassignAppointment(token);
+  const { mutateAsync: editAppointment } = useEditAppointment(token);
+  const { mutateAsync: deleteAppointment } = useDeleteAppointment(token);
+  const { mutateAsync: addEmployee } = useAddEmployee(token);
+  const { mutateAsync: deleteEmployee } = useDeleteEmployee(token);
+  const { mutateAsync: editEmployee } = useEditEmployee(token);
+  const { mutateAsync: addService } = useAddService(token);
+  const { mutateAsync: editService } = useEditService(token);
+  const { mutateAsync: deleteService } = useDeleteService(token);
+  const { mutateAsync: editClient } = useEditClient(token);
+  const { mutateAsync: deleteClient } = useDeleteClient(token);
+  const { mutateAsync: addBloqueio } = useAddBloqueio(token);
+  const { mutateAsync: deleteBloqueio } = useDeleteBloqueio(token);
 
-      if (!response.ok) throw new Error("Credenciais inválidas");
+  const handleReassign = (appointmentId: string, newEmployeeId: string) => {
+    return reassignAppointment({ id: appointmentId, newEmployeeId });
+  };
 
-      const data = await response.json();
-      
-      setToken(data.token);
-      localStorage.setItem('spa_token', data.token); // Mantém logado ao dar F5
-      
-      const loggedUser = {
-        id: String(data.usuario.id),
-        name: data.usuario.nome || 'Usuário',
-        email: data.usuario.email || email,
-        role: data.usuario.papel as 'supervisor' | 'collaborator' | 'receptionist',
-        specialty: data.usuario.especialidade,
-        avatar: `https://api.dicebear.com/7.x/notionists/svg?seed=${data.usuario.nome || 'usuario'}`,
-        rating: 5.0,
-        completedServices: 0
-      };
-      
-      setCurrentUser(loggedUser);
-      setActiveRoleView(loggedUser.role);
-      setLoginError(null);
-    } catch (err) {
-      console.error("Falha na requisição de login:", err);
-      setLoginError('E-mail ou senha incorretos.');
-    }
-  }, []);
+  const handleDeleteEmployee = (id: string, reallocateToId?: string) => {
+    return deleteEmployee({ id, reallocateToId });
+  };
 
-  const handleLogout = useCallback(() => {
-    setCurrentUser(null);
-    setToken(null);
-    localStorage.removeItem('spa_token');
-  }, []);
+  const handleEditEmployee = (id: string, employee: Partial<Employee>) => {
+    return editEmployee({ id, ...employee });
+  };
 
-  // 4. FUNÇÃO DE AGENDAMENTO (Agora via IP de rede)
-  const handleAddAppointment = useCallback(async (newApp: any) => {
-    try {
-      // O 'Z' força o UTC, impedindo que o JavaScript some +3 horas na hora de enviar pro banco
-      const parsedDate = new Date(`${newApp.date}T${newApp.time || '12:00'}:00Z`);
-      const dataISO = !isNaN(parsedDate.getTime()) ? parsedDate.toISOString() : new Date().toISOString();
+  const handleEditService = (id: string, service: Partial<Service>) => {
+    return editService({ id, ...service } as Service);
+  };
 
-      const response = await fetch(`${API_URL}/api/agendamentos`, {
-        method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}` 
-        },
-        body: JSON.stringify({
-          clientName: newApp.clientName,
-          contact: newApp.contact,
-          collaboratorId: newApp.assignedEmployeeId,
-          date: dataISO, // Agora enviamos o momento exato em formato Universal (UTC)
-          serviceNames: newApp.services
-        })
-      });
+  const handleEditAppointment = (id: string, appointment: Partial<Appointment>) => {
+    return editAppointment({ id, ...appointment });
+  };
 
-      if (!response.ok) throw new Error("Erro ao salvar no banco");
-
-      const ag = await response.json();
-      
-      let dateStr = newApp.date;
-      let timeStr = newApp.time || '12:00';
-      const dataObj = new Date(ag.data);
-      if (!isNaN(dataObj.getTime())) {
-        dateStr = dataObj.toISOString().split('T')[0];
-        timeStr = dataObj.toISOString().split('T')[1].substring(0, 5);
-      }
-      
-      // Formatamos o agendamento recém-criado para o padrão do Front-end
-      const novoAgendamentoFormatado = {
-        id: String(ag.id),
-        clientName: ag.cliente?.nome || newApp.clientName,
-        contact: newApp.contact || 'Não informado',
-        services: ag.servicos ? ag.servicos.map((s: any) => s.nome) : newApp.services,
-        date: dateStr,
-        time: timeStr,
-        guests: newApp.guests || 1,
-        specialNeeds: newApp.specialNeeds || [],
-        assignedEmployeeId: String(ag.colaboradorId),
-        status: ag.status || 'scheduled'
-      };
-
-      setAppointments(prev => [...prev, novoAgendamentoFormatado]);
-      return true; // Retorna sucesso
-    } catch (error) {
-      console.error("Erro:", error);
-      alert("Não foi possível salvar o agendamento.");
-      return false; // Retorna falha
-    }
-  }, [token]);
-
-  // Atualizando o agendamento para concluído no banco de dados e na interface
-  const handleCompleteAppointment = useCallback(async (id: string) => {
-    try {
-      const response = await fetch(`${API_URL}/api/agendamentos/${id}/status`, {
-        method: 'PATCH',
-        headers: { 
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}` 
-        },
-        body: JSON.stringify({ status: 'completed' })
-      });
-
-      if (!response.ok) throw new Error("Erro ao atualizar o banco de dados");
-
-      // Atualiza localmente a interface para refletir a mudança sem precisar dar refresh
-      setAppointments(prev => 
-        prev.map(app => app.id === id ? { ...app, status: 'completed' } : app)
-      );
-    } catch (error) {
-      console.error("Erro:", error);
-      alert("Não foi possível concluir o agendamento.");
-    }
-  }, [token]);
-
-  // 4.5 FUNÇÃO PARA REALOCAR AGENDAMENTO
-  const handleReassign = useCallback(async (appointmentId: string, newEmployeeId: string) => {
-    try {
-      const response = await fetch(`${API_URL}/api/agendamentos/${appointmentId}/colaborador`, {
-        method: 'PATCH',
-        headers: { 
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}` 
-        },
-        body: JSON.stringify({ colaboradorId: newEmployeeId })
-      });
-
-      if (!response.ok) throw new Error("Erro ao atualizar o banco de dados");
-
-      // Atualiza localmente a interface para o card "pular" para a outra coluna
-      setAppointments(prev => 
-        prev.map(app => app.id === appointmentId ? { ...app, assignedEmployeeId: newEmployeeId } : app)
-      );
-    } catch (error) {
-      console.error("Erro:", error);
-      alert("Não foi possível realocar o agendamento.");
-    }
-  }, [token]);
-
-  // 4.6 FUNÇÃO PARA EDITAR DADOS DO AGENDAMENTO (Hora, Data, Cliente, etc)
-  const handleEditAppointment = useCallback(async (id: string, updatedData: any) => {
-    try {
-      let dataISO = undefined;
-      if (updatedData.date && updatedData.time) {
-        const parsedDate = new Date(`${updatedData.date}T${updatedData.time}:00Z`);
-        if (!isNaN(parsedDate.getTime())) dataISO = parsedDate.toISOString();
-      }
-
-      const response = await fetch(`${API_URL}/api/agendamentos/${id}`, {
-        method: 'PUT',
-        headers: { 
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}` 
-        },
-        body: JSON.stringify({
-          clientName: updatedData.clientName,
-          contact: updatedData.contact,
-          colaboradorId: updatedData.assignedEmployeeId,
-          date: dataISO,
-          serviceNames: updatedData.services
-        })
-      });
-
-      if (!response.ok) throw new Error("Erro ao atualizar o banco de dados");
-
-      const ag = await response.json();
-      const dataObj = new Date(ag.data);
-
-      setAppointments(prev => prev.map(app => app.id === id ? {
-        ...app,
-        clientName: ag.cliente?.nome || updatedData.clientName,
-        contact: ag.cliente?.telefone || updatedData.contact || 'Não informado',
-        services: ag.servicos ? ag.servicos.map((s: any) => s.nome) : updatedData.services,
-        date: dataObj.toISOString().split('T')[0],
-        time: dataObj.toISOString().split('T')[1].substring(0, 5),
-        assignedEmployeeId: String(ag.colaboradorId),
-      } : app));
-      
-      return true;
-    } catch (error) {
-      console.error("Erro:", error);
-      alert("Não foi possível editar o agendamento.");
-      return false;
-    }
-  }, [token]);
-
-  // 4.6 FUNÇÃO PARA EXCLUIR (CANCELAR) AGENDAMENTO
-  const handleDeleteAppointment = useCallback(async (id: string) => {
-    try {
-      const response = await fetch(`${API_URL}/api/agendamentos/${id}`, {
-        method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (!response.ok) throw new Error("Erro ao excluir do banco");
-      
-      setAppointments(prev => prev.filter(app => app.id !== id));
-      return true;
-    } catch (error) {
-      console.error("Erro:", error);
-      alert("Não foi possível cancelar o agendamento.");
-      return false;
-    }
-  }, [token]);
-
-  // 5. FUNÇÃO PARA ADICIONAR COLABORADOR
-  const handleAddEmployee = useCallback(async (newEmp: any) => {
-    try {
-      const response = await fetch(`${API_URL}/api/colaboradores`, {
-        method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}` 
-        },
-        body: JSON.stringify({
-          nome: newEmp.name,
-          email: newEmp.email,
-          especialidade: newEmp.specialty,
-          papel: newEmp.role
-        })
-      });
-
-      if (!response.ok) {
-        const errData = await response.json().catch(() => null);
-        throw new Error(errData?.erro || "Não foi possível adicionar o colaborador.");
-      }
-
-      const colab = await response.json();
-      
-      const novoColaboradorFormatado = {
-        id: String(colab.id),
-        name: colab.nome,
-        email: colab.email || newEmp.email,
-        role: (colab.papel as 'supervisor' | 'collaborator' | 'receptionist') || 'collaborator',
-        specialty: colab.especialidade,
-        avatar: `https://api.dicebear.com/7.x/notionists/svg?seed=${colab.nome}`,
-        rating: 5.0,
-        completedServices: 0
-      };
-
-      setEmployees(prev => [...prev, novoColaboradorFormatado]);
-      return true; // Retorna sucesso para o front-end
-    } catch (error: any) {
-      console.error("Erro:", error);
-      return error.message; // Retorna a string de erro para o painel mostrar no modal
-    }
-  }, [token]);
-
-  // 6. FUNÇÃO PARA EXCLUIR COLABORADOR
-  const handleDeleteEmployee = useCallback(async (id: string, reallocateToId?: string) => {
-    try {
-      const url = reallocateToId 
-        ? `${API_URL}/api/colaboradores/${id}?reallocateTo=${reallocateToId}` 
-        : `${API_URL}/api/colaboradores/${id}`;
-        
-      const response = await fetch(url, { 
-        method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (!response.ok) throw new Error("Erro ao excluir do banco");
-      
-      setEmployees(prev => prev.filter(emp => emp.id !== id));
-      
-      if (reallocateToId) {
-        setAppointments(prev => prev.map(app => app.assignedEmployeeId === id ? { ...app, assignedEmployeeId: reallocateToId } : app));
-      } else {
-        setAppointments(prev => prev.filter(app => app.assignedEmployeeId !== id));
-      }
-    } catch (error) {
-      console.error("Erro:", error);
-      alert("Não foi possível excluir o colaborador.");
-    }
-  }, [token]);
-
-  // 7. FUNÇÃO PARA EDITAR COLABORADOR
-  const handleEditEmployee = useCallback(async (id: string, updatedEmp: any) => {
-    try {
-      const response = await fetch(`${API_URL}/api/colaboradores/${id}`, {
-        method: 'PUT',
-        headers: { 
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}` 
-        },
-        body: JSON.stringify({
-          nome: updatedEmp.name,
-          email: updatedEmp.email,
-          especialidade: updatedEmp.specialty,
-          papel: updatedEmp.role
-        })
-      });
-
-      if (!response.ok) {
-        const errData = await response.json().catch(() => null);
-        throw new Error(errData?.erro || "Erro ao atualizar no banco.");
-      }
-
-      const colab = await response.json();
-      
-      setEmployees(prev => prev.map(emp => emp.id === id ? { 
-        ...emp, name: colab.nome, email: colab.email, specialty: colab.especialidade, 
-        role: colab.papel, avatar: `https://api.dicebear.com/7.x/notionists/svg?seed=${colab.nome}` 
-      } : emp));
-      return true;
-    } catch (error: any) {
-      console.error("Erro:", error);
-      return error.message; // Retorna string de erro
-    }
-  }, [token]);
-
-  // 8. FUNÇÕES DE SERVIÇOS
-  const handleAddService = useCallback(async (serviceData: any) => {
-    try {
-      const response = await fetch(`${API_URL}/api/servicos`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-        body: JSON.stringify(serviceData)
-      });
-      if (!response.ok) throw new Error("Erro");
-      const novo = await response.json();
-      setServices(prev => [...prev, novo]);
-      return true;
-    } catch (err) {
-      alert("Não foi possível salvar o serviço. Verifique se o nome já existe!");
-      return false;
-    }
-  }, [token]);
-
-  const handleEditService = useCallback(async (id: string, serviceData: any) => {
-    try {
-      const response = await fetch(`${API_URL}/api/servicos/${id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-        body: JSON.stringify(serviceData)
-      });
-      if (!response.ok) throw new Error("Erro");
-      const updated = await response.json();
-      setServices(prev => prev.map(s => s.id === id ? updated : s));
-      return true;
-    } catch (error) {
-      alert("Não foi possível editar o serviço. Verifique se o nome já existe.");
-      return false;
-    }
-  }, [token]);
-
-  const handleDeleteService = useCallback(async (id: string) => {
-    try {
-      const response = await fetch(`${API_URL}/api/servicos/${id}`, {
-        method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (response.ok) setServices(prev => prev.filter(s => s.id !== id));
-    } catch (err) { console.error(err); }
-  }, [token]);
-
-  // 9. FUNÇÃO PARA EDITAR CLIENTE
-  const handleEditClient = useCallback(async (id: string, updatedData: any) => {
-    try {
-      const response = await fetch(`${API_URL}/api/clientes/${id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-        body: JSON.stringify(updatedData)
-      });
-      if (!response.ok) throw new Error("Erro");
-      const updated = await response.json();
-      setClients(prev => prev.map(c => c.id === id ? updated : c));
-      setAppointments(prev => prev.map(app => 
-        app.clientName === updatedData.oldName ? { ...app, clientName: updated.nome, contact: updated.telefone || 'Não informado' } : app
-      ));
-      return true;
-    } catch (error) {
-      console.error(error);
-      alert("Não foi possível atualizar o cliente.");
-      return false;
-    }
-  }, [token]);
-
-  // 10. FUNÇÃO PARA EXCLUIR CLIENTE
-  const handleDeleteClient = useCallback(async (id: string) => {
-    try {
-      const response = await fetch(`${API_URL}/api/clientes/${id}`, {
-        method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (!response.ok) throw new Error("Erro");
-      
-      setClients(prev => prev.filter(c => c.id !== id));
-      return true;
-    } catch (error) {
-      console.error(error);
-      alert("Não foi possível excluir o cliente.");
-      return false;
-    }
-  }, [token]);
+  const handleEditClient = (id: string, clientData: Partial<Client>) => {
+    return editClient({ id, ...clientData });
+  };
 
   const staff = useMemo(() => {
     // Repassa todos (Colab e Super) para aparecerem, exceto o admin virtual
@@ -561,13 +191,48 @@ export default function App() {
     }));
   }, [employees, appointments]);
 
+  if (!currentUser && isPublicTVMode) {
+    return <TVPanelView appointments={appointments} employees={staff} onExit={() => setIsPublicTVMode(false)} />;
+  }
+
   if (!currentUser) {
-    return <LoginView onLogin={handleLogin} error={loginError} />;
+    return <LoginView onLogin={handleLogin} onOpenTVPanel={() => setIsPublicTVMode(true)} error={loginError} />;
+  }
+
+  // 3. ESTADOS GLOBAIS DE CARREGAMENTO E ERRO
+  // Combina os status para garantir que a interface só renderize com tudo pronto
+  const isGlobalLoading = loadingEmployees || loadingAppointments || loadingServices || loadingClients;
+  const isGlobalError = errorEmployees || errorAppointments || errorServices || errorClients;
+
+  if (isGlobalLoading) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-[var(--color-background)]">
+        <span className="material-symbols-outlined text-6xl text-[var(--color-primary)] animate-spin mb-4">
+          progress_activity
+        </span>
+        <p className="text-xl font-serif text-[var(--color-on-background)] animate-pulse">
+          Carregando dados do sistema...
+        </p>
+      </div>
+    );
+  }
+
+  if (isGlobalError) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-[var(--color-background)] p-4">
+        <div className="bg-[var(--color-error-container)] p-8 rounded-3xl max-w-md text-center shadow-lg border border-[var(--color-error)]">
+          <span className="material-symbols-outlined text-5xl text-[var(--color-on-error-container)] mb-4">cloud_off</span>
+          <h2 className="text-2xl font-bold text-[var(--color-on-error-container)] mb-2">Falha na Conexão</h2>
+          <p className="text-[var(--color-on-error-container)] opacity-80 mb-6">Não foi possível carregar as informações essenciais. Verifique sua conexão com o servidor.</p>
+          <button onClick={() => window.location.reload()} className="bg-[var(--color-error)] text-[var(--color-on-error)] px-6 py-2 rounded-xl font-bold uppercase tracking-wider transition-colors hover:bg-[var(--color-error-dim)]">Tentar Novamente</button>
+        </div>
+      </div>
+    );
   }
 
   // Se o Modo TV estiver ativo, renderiza ele em tela cheia (sem Layout de fundo)
   if (activeRoleView === 'tv') {
-    return <TVPanelView appointments={appointments} employees={staff} onExit={() => setActiveRoleView(currentUser.role as any)} />;
+    return <TVPanelView appointments={appointments} employees={staff} onExit={() => setActiveRoleView(currentUser.role)} />;
   }
 
   return (
@@ -588,44 +253,41 @@ export default function App() {
         <SupervisorView 
           employees={staff}
           appointments={appointments}
-          services={services}
-          clients={clients}
+          services={services || []}
+          clients={clients || []}
           onReassign={handleReassign}
-          onAddEmployee={handleAddEmployee}
+          onAddEmployee={addEmployee}
           onDeleteEmployee={handleDeleteEmployee}
           onEditEmployee={handleEditEmployee}
-          onAddService={handleAddService}
+          onAddService={addService}
           onEditService={handleEditService}
-          onDeleteService={handleDeleteService}
-          onAddAppointment={handleAddAppointment}
-          onDeleteAppointment={handleDeleteAppointment}
+          onDeleteService={deleteService}
+          onAddAppointment={addAppointment}
+          isAddingAppointment={isAddingAppointment}
+          onDeleteAppointment={deleteAppointment}
           onEditAppointment={handleEditAppointment}
-          onCompleteAppointment={handleCompleteAppointment}
-        />
-      ) : activeRoleView === 'receptionist' || currentUser.role === 'receptionist' ? (
-        <ReceptionistView 
-          currentUser={currentUser}
-          employees={staff}
-          appointments={appointments}
-          services={services}
-          clients={clients}
-          onAddAppointment={handleAddAppointment}
-          onReassign={handleReassign}
-          onDeleteAppointment={handleDeleteAppointment}
-          onEditAppointment={handleEditAppointment}
+          onCompleteAppointment={completeAppointment}
           onEditClient={handleEditClient}
-          onDeleteClient={handleDeleteClient}
-          onCompleteAppointment={handleCompleteAppointment}
+          onDeleteClient={deleteClient}
+          onAddBloqueio={addBloqueio}
+          onDeleteBloqueio={deleteBloqueio}
         />
       ) : (
         <CollaboratorView 
           currentUser={currentUser}
           employees={staff}
           appointments={appointments}
-          services={services}
-          clients={clients}
-          onAddAppointment={handleAddAppointment}
-          onCompleteAppointment={handleCompleteAppointment}
+          services={services || []}
+          clients={clients || []}
+          onAddAppointment={addAppointment}
+          isAddingAppointment={isAddingAppointment}
+          onEditAppointment={handleEditAppointment}
+          onDeleteAppointment={deleteAppointment}
+          onEditClient={handleEditClient}
+          onDeleteClient={deleteClient}
+          onCompleteAppointment={completeAppointment}
+          onAddBloqueio={addBloqueio}
+          onDeleteBloqueio={deleteBloqueio}
         />
       )}
     </Layout>

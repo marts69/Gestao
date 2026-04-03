@@ -1,4 +1,13 @@
-export type Role = 'collaborator' | 'supervisor' | 'receptionist';
+export type Role = 'collaborator' | 'supervisor';
+
+export interface Bloqueio {
+  id: string;
+  data: string;
+  horaInicio: string;
+  horaFim: string;
+  motivo: string;
+  colaboradorId: string;
+}
 
 export interface Employee {
   id: string;
@@ -9,12 +18,16 @@ export interface Employee {
   avatar: string;
   rating: number;
   completedServices: number;
+  diasTrabalho?: string;
+  bloqueios?: Bloqueio[];
 }
 
 export interface Appointment {
   id: string;
+  clientId?: string;
   clientName: string;
   contact: string;
+  cpf?: string;
   services: string[];
   date: string;
   time: string;
@@ -24,6 +37,24 @@ export interface Appointment {
   assignedEmployeeId: string;
   status: 'scheduled' | 'completed';
 }
+
+export interface Service {
+  id: string;
+  nome: string;
+  preco: number;
+  duracao: number;
+  icone?: string;
+  descricao?: string;
+}
+
+export interface Client {
+  id: string;
+  nome: string;
+  telefone: string;
+  cpf?: string;
+  observacao?: string;
+}
+
 
 export const AVAILABLE_SERVICES = [
   'Massagem Relaxante',
@@ -44,8 +75,5 @@ export const SERVICE_DURATIONS: Record<string, number> = {
 };
 
 export const SPECIAL_NEEDS_OPTIONS = [
-  'Gravidez',
-  'Pressão Alta',
-  'Alergias',
   'Mobilidade Reduzida'
 ];

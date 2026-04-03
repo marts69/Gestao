@@ -64,13 +64,12 @@ export function Layout({ children, userName, userRole, activeView, onViewChange,
                 className="bg-transparent border-none text-xs font-semibold text-on-surface-variant uppercase tracking-tighter font-body focus:ring-0 cursor-pointer outline-none m-0 p-0"
               >
                 <option value="supervisor">Portal da Supervisão</option>
-                <option value="receptionist">Portal da Recepção</option>
                 <option value="collaborator">Portal do Colaborador</option>
                 <option value="tv">Painel de TV (Recepção)</option>
               </select>
             ) : (
               <span className="text-xs font-semibold text-on-surface-variant uppercase tracking-tighter font-body">
-                {userRole === 'receptionist' ? 'Portal da Recepção' : 'Portal do Colaborador'}
+                Portal do Colaborador
               </span>
             )}
           </div>
@@ -133,7 +132,13 @@ export function Layout({ children, userName, userRole, activeView, onViewChange,
             </div>
             <div className="flex flex-wrap gap-3">
               {['#006a5a', '#b71c1c', '#0d47a1', '#e65100', '#4a148c', '#424242', '#0ea5e9', '#10b981', '#f43f5e', '#d946ef', '#8b5cf6', '#f59e0b'].map(color => (
-                <button key={color} onClick={() => changePrimaryColor(color)} className="w-10 h-10 rounded-full border-2 border-surface shadow-sm transition-transform hover:scale-110 focus:ring-2 focus:ring-offset-2" style={{ backgroundColor: color, ringColor: color }} title={color}></button>
+                <button
+                  key={color}
+                  onClick={() => changePrimaryColor(color)}
+                  className="w-10 h-10 rounded-full border-2 border-surface shadow-sm transition-transform hover:scale-110 focus:ring-2 focus:ring-offset-2"
+                  style={{ backgroundColor: color }}
+                  title={color}
+                ></button>
               ))}
             </div>
           </motion.div>

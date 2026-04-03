@@ -2,6 +2,8 @@ import React, { StrictMode, Component, ErrorInfo, ReactNode } from 'react';
 import {createRoot} from 'react-dom/client';
 import App from './App';
 import * as Sentry from '@sentry/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { AuthProvider } from './AuthContext';
 import './index.css';
 
 const SENTRY_DSN = "SUA_DSN_DO_SENTRY_AQUI"; // Insira a chave fornecida pelo painel do Sentry
@@ -14,6 +16,8 @@ if (SENTRY_DSN && SENTRY_DSN !== "SUA_DSN_DO_SENTRY_AQUI") {
   });
 }
 
+const queryClient = new QueryClient();
+
 interface ErrorBoundaryProps {
   children: ReactNode;
 }
@@ -24,6 +28,8 @@ interface ErrorBoundaryState {
 }
 
 class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
+  declare props: Readonly<ErrorBoundaryProps>;
+
   public state: ErrorBoundaryState = { 
     hasError: false, 
     errorMsg: '' 
@@ -33,8 +39,8 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
     super(props);
   }
 
-  static getDerivedStateFromError(error: any): ErrorBoundaryState {
-    return { hasError: true, errorMsg: error?.message || 'Um erro inesperado ocorreu.' };
+  static getDerivedStateFromError(error: Error): ErrorBoundaryState {
+    return { hasError: true, errorMsg: error.message || 'Um erro inesperado ocorreu.' };
   }
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
@@ -74,7 +80,11 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <ErrorBoundary>
-      <App />
+      <QueryClientProvider client={queryClient}>
+        <AuthProvider>
+          <App />
+        </AuthProvider>
+      </QueryClientProvider>
     </ErrorBoundary>
   </StrictMode>,
 );
