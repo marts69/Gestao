@@ -16,13 +16,17 @@ model Colaborador {
   especialidade String
   papel         String        @default("collaborator")
   ativo         Boolean       @default(true)
+  diasTrabalho  String?       @default("1,2,3,4,5,6")
   agendamentos  Agendamento[]
+  bloqueios     Bloqueio[]
 }
 
 model Cliente {
   id           String        @id @default(uuid())
   nome         String
   telefone     String?
+  cpf          String?
+  observacao   String?
   agendamentos Agendamento[]
 }
 
@@ -45,4 +49,15 @@ model Agendamento {
   colaborador   Colaborador @relation(fields: [colaboradorId], references: [id])
   cliente       Cliente     @relation(fields: [clienteId], references: [id])
   servicos      Servico[]
+}
+
+model Bloqueio {
+  id            String      @id @default(uuid())
+  data          String
+  horaInicio    String
+  horaFim       String
+  motivo        String
+  colaboradorId String
+
+  colaborador   Colaborador @relation(fields: [colaboradorId], references: [id])
 }

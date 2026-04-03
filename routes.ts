@@ -69,7 +69,9 @@ export function createRouter(io: Server) {
   // 1. Rota para LISTAR todos os colaboradores
   router.get('/colaboradores', verificarToken, async (req, res) => {
     try {
-      const colaboradores = await prisma.colaborador.findMany();
+      const colaboradores = await prisma.colaborador.findMany({
+        include: { bloqueios: true }
+      });
       res.json(colaboradores);
     } catch (error) {
       res.status(500).json({ erro: 'Erro ao buscar colaboradores' });
@@ -92,7 +94,7 @@ export function createRouter(io: Server) {
   // 3. Rota para CRIAR um novo colaborador
   router.post('/colaboradores', verificarToken, async (req, res) => {
     try {
-      const { nome, email, especialidade, papel, senha } = req.body;
+      const { nome, email, especialidade, papel, senha, diasTrabalho } = req.body;
       
       // Prevenção contra geração de e-mails homônimos/duplicados no Front-end
       const emailExiste = await prisma.colaborador.findUnique({ where: { email } });
@@ -102,7 +104,15 @@ export function createRouter(io: Server) {
 
       const hashSenha = senha ? await bcrypt.hash(senha, 10) : await bcrypt.hash('123456', 10);
       const novoColaborador = await prisma.colaborador.create({
-        data: { nome, email, especialidade, senha: hashSenha, papel: papel || 'collaborator', ativo: true }
+        data: {
+          nome,
+          email,
+          especialidade,
+          senha: hashSenha,
+          papel: papel || 'collaborator',
+          ativo: true,
+          diasTrabalho: diasTrabalho || '1,2,3,4,5,6'
+        }
       });
       notifyClients();
       res.status(201).json(novoColaborador);
@@ -114,22 +124,51 @@ export function createRouter(io: Server) {
   // 4. Rota para CRIAR um novo agendamento
   router.post('/agendamentos', verificarToken, async (req, res) => {
     try {
-      const { clientName, collaboratorId, date, serviceNames, contact } = req.body;
+      const { clientName, collaboratorId, date, serviceNames, contact, cpf, clientId, clientObservation } = req.body;
       
-      // 1º Tenta achar o cliente pelo WhatsApp (Unique) para não misturar homônimos
-      let cliente = (contact && contact !== 'Não informado') 
-        ? await prisma.cliente.findFirst({ where: { telefone: contact } }) 
-        : null;
-        
-      // 2º Se não achou pelo número, faz fallback pelo nome exato
+      let cliente = clientId ? await prisma.cliente.findUnique({ where: { id: clientId } }) : null;
+
+      if (!cliente && cpf) {
+        cliente = await prisma.cliente.findFirst({ where: { cpf } });
+      }
+
+      if (!cliente && contact && contact !== 'Não informado') {
+        cliente = await prisma.cliente.findFirst({ where: { telefone: contact } });
+      }
+
       if (!cliente) {
         cliente = await prisma.cliente.findFirst({ where: { nome: clientName } });
       }
 
       if (!cliente) {
-        cliente = await prisma.cliente.create({ data: { nome: clientName, telefone: contact } });
-      } else if (contact && contact !== 'Não informado' && !cliente.telefone) {
-        cliente = await prisma.cliente.update({ where: { id: cliente.id }, data: { telefone: contact } });
+        try {
+          cliente = await prisma.cliente.create({
+            data: {
+              nome: clientName,
+              telefone: contact,
+              cpf: cpf || null,
+              observacao: clientObservation || null
+            } as any
+          });
+        } catch {
+          cliente = await prisma.cliente.create({ data: { nome: clientName, telefone: contact } });
+        }
+      } else {
+        const updateData: any = {};
+        if (contact && contact !== 'Não informado') updateData.telefone = contact;
+        if (cpf) updateData.cpf = cpf;
+        if (clientObservation !== undefined) updateData.observacao = clientObservation;
+
+        if (Object.keys(updateData).length > 0) {
+          try {
+            cliente = await prisma.cliente.update({ where: { id: cliente.id }, data: updateData });
+          } catch {
+            const { telefone } = updateData;
+            if (telefone) {
+              cliente = await prisma.cliente.update({ where: { id: cliente.id }, data: { telefone } });
+            }
+          }
+        }
       }
 
       const servicosConectados = [];
@@ -162,7 +201,7 @@ export function createRouter(io: Server) {
   router.put('/agendamentos/:id', verificarToken, async (req, res) => {
     try {
       const { id } = req.params;
-      const { clientName, date, serviceNames, colaboradorId, contact } = req.body;
+      const { clientName, date, serviceNames, colaboradorId, contact, cpf, clientObservation } = req.body;
       const dataUpdate: any = {};
 
       if (date) dataUpdate.data = new Date(date);
@@ -172,15 +211,36 @@ export function createRouter(io: Server) {
         let cliente = (contact && contact !== 'Não informado') 
           ? await prisma.cliente.findFirst({ where: { telefone: contact } }) 
           : null;
+
+        if (!cliente && cpf) {
+          cliente = await prisma.cliente.findFirst({ where: { cpf } });
+        }
           
         if (!cliente) {
           cliente = await prisma.cliente.findFirst({ where: { nome: clientName } });
         }
 
         if (!cliente) {
-          cliente = await prisma.cliente.create({ data: { nome: clientName, telefone: contact !== 'Não informado' ? contact : null } });
-        } else if (contact && contact !== 'Não informado' && contact !== cliente.telefone) {
-          cliente = await prisma.cliente.update({ where: { id: cliente.id }, data: { telefone: contact } });
+          try {
+            cliente = await prisma.cliente.create({ data: { nome: clientName, telefone: contact !== 'Não informado' ? contact : null, cpf: cpf || null, observacao: clientObservation || null } as any });
+          } catch {
+            cliente = await prisma.cliente.create({ data: { nome: clientName, telefone: contact !== 'Não informado' ? contact : null } });
+          }
+        } else {
+          const updateClientData: any = {};
+          if (contact && contact !== 'Não informado' && contact !== cliente.telefone) updateClientData.telefone = contact;
+          if (cpf) updateClientData.cpf = cpf;
+          if (clientObservation !== undefined) updateClientData.observacao = clientObservation;
+
+          if (Object.keys(updateClientData).length > 0) {
+            try {
+              cliente = await prisma.cliente.update({ where: { id: cliente.id }, data: updateClientData });
+            } catch {
+              if (updateClientData.telefone) {
+                cliente = await prisma.cliente.update({ where: { id: cliente.id }, data: { telefone: updateClientData.telefone } });
+              }
+            }
+          }
         }
         dataUpdate.clienteId = cliente.id;
       }
@@ -219,12 +279,37 @@ export function createRouter(io: Server) {
     }
   });
 
+  // Compatibilidade com frontend novo
+  router.patch('/agendamentos/:id/concluir', verificarToken, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const agendamentoAtualizado = await prisma.agendamento.update({ where: { id }, data: { status: 'completed' } });
+      notifyClients();
+      res.json(agendamentoAtualizado);
+    } catch (error) {
+      res.status(500).json({ erro: 'Erro ao concluir agendamento' });
+    }
+  });
+
   // 5.5 Rota para REALOCAR um agendamento para outro colaborador
   router.patch('/agendamentos/:id/colaborador', verificarToken, async (req, res) => {
     try {
       const { id } = req.params;
       const { colaboradorId } = req.body;
       const agendamentoAtualizado = await prisma.agendamento.update({ where: { id: id }, data: { colaboradorId } });
+      notifyClients();
+      res.json(agendamentoAtualizado);
+    } catch (error) {
+      res.status(500).json({ erro: 'Erro ao realocar agendamento' });
+    }
+  });
+
+  // Compatibilidade com frontend novo
+  router.patch('/agendamentos/:id/reassign', verificarToken, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { newEmployeeId } = req.body;
+      const agendamentoAtualizado = await prisma.agendamento.update({ where: { id }, data: { colaboradorId: newEmployeeId } });
       notifyClients();
       res.json(agendamentoAtualizado);
     } catch (error) {
@@ -281,8 +366,9 @@ export function createRouter(io: Server) {
   router.put('/colaboradores/:id', verificarToken, async (req, res) => {
     try {
       const { id } = req.params;
-      const { nome, email, especialidade, papel, senha } = req.body;
+      const { nome, email, especialidade, papel, senha, diasTrabalho } = req.body;
       const dataUpdate: any = { nome, email, especialidade, papel };
+      if (diasTrabalho !== undefined) dataUpdate.diasTrabalho = diasTrabalho;
       if (senha) dataUpdate.senha = await bcrypt.hash(senha, 10);
       const colaboradorAtualizado = await prisma.colaborador.update({ where: { id }, data: dataUpdate });
       notifyClients();
@@ -380,10 +466,10 @@ export function createRouter(io: Server) {
   router.put('/clientes/:id', verificarToken, async (req, res) => {
     try {
       const { id } = req.params;
-      const { nome, telefone, observacao } = req.body;
+      const { nome, telefone, observacao, cpf } = req.body;
       let clienteAtualizado;
       try {
-        clienteAtualizado = await prisma.cliente.update({ where: { id }, data: { nome, telefone, observacao } as any });
+        clienteAtualizado = await prisma.cliente.update({ where: { id }, data: { nome, telefone, observacao, cpf } as any });
       } catch (e) {
         clienteAtualizado = await prisma.cliente.update({ where: { id }, data: { nome, telefone } });
       }
@@ -404,6 +490,39 @@ export function createRouter(io: Server) {
       res.json({ mensagem: 'Cliente excluído com sucesso' });
     } catch (error) {
       res.status(500).json({ erro: 'Erro ao excluir cliente' });
+    }
+  });
+
+  // 15. Rotas de BLOQUEIOS (Faltas e Intervalos)
+  router.get('/bloqueios', verificarToken, async (req, res) => {
+    try {
+      const bloqueios = await prisma.bloqueio.findMany();
+      res.json(bloqueios);
+    } catch (error) {
+      res.status(500).json({ erro: 'Erro ao buscar bloqueios' });
+    }
+  });
+
+  router.post('/bloqueios', verificarToken, async (req, res) => {
+    try {
+      const { data, horaInicio, horaFim, motivo, colaboradorId } = req.body;
+      const novoBloqueio = await prisma.bloqueio.create({
+        data: { data, horaInicio, horaFim, motivo, colaboradorId }
+      });
+      notifyClients();
+      res.status(201).json(novoBloqueio);
+    } catch (error) {
+      res.status(500).json({ erro: 'Erro ao criar bloqueio' });
+    }
+  });
+
+  router.delete('/bloqueios/:id', verificarToken, async (req, res) => {
+    try {
+      await prisma.bloqueio.delete({ where: { id: req.params.id } });
+      notifyClients();
+      res.json({ mensagem: 'Bloqueio removido com sucesso' });
+    } catch (error) {
+      res.status(500).json({ erro: 'Erro ao excluir bloqueio' });
     }
   });
 
