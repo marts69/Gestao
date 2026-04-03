@@ -6,6 +6,7 @@ import { formatPhone } from '../utils/formatters';
 import { getDuration, getLocalTodayString, hasOverlap } from './appointmentUtils';
 import { SupervisorEquipeTab } from './SupervisorEquipeTab';
 import { UpcomingAppointmentsModal } from './UpcomingAppointmentsModal';
+import { BlockModal } from '../BlockModal';
 
 
 const EmployeeScheduleColumn = React.memo(({
@@ -154,8 +155,6 @@ export function SupervisorView({ employees, appointments, services, clients, onR
   const [scheduleSearchTerm, setScheduleSearchTerm] = useState('');
   const [showNewBookingModal, setShowNewBookingModal] = useState(false);
   const [showNewBlockModal, setShowNewBlockModal] = useState(false);
-  const [blockReason, setBlockReason] = useState('');
-  const [blockEndTime, setBlockEndTime] = useState('');
   const [bookName, setBookName] = useState('');
   const [bookPhone, setBookPhone] = useState('');
   const [bookTime, setBookTime] = useState('');
@@ -396,26 +395,6 @@ export function SupervisorView({ employees, appointments, services, clients, onR
     
     return true;
   }).sort((a, b) => new Date(`${b.date}T${b.time}`).getTime() - new Date(`${a.date}T${a.time}`).getTime()) : [];
-
-  const handleBlockSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!onAddBloqueio) return;
-    const success = await onAddBloqueio({
-      data: receptionDate,
-      horaInicio: bookTime,
-      horaFim: blockEndTime,
-      motivo: blockReason,
-      colaboradorId: bookEmp
-    });
-    if (success) {
-      setShowNewBlockModal(false);
-      setBlockReason(''); setBlockEndTime(''); setBookTime(''); setBookEmp('');
-      setToastMessage('Bloqueio registrado!'); 
-      setTimeout(() => setToastMessage(null), 3000);
-    } else {
-      setErrorMessage('Erro ao registrar bloqueio.');
-    }
-  };
 
   // Função de criar serviço
   const handleServiceSubmit = async (e: React.FormEvent) => {
@@ -1161,46 +1140,19 @@ export function SupervisorView({ employees, appointments, services, clients, onR
         onClose={() => setShowUpcomingAppointments(false)}
       />
 
-      {/* Modal Independente de Bloqueio */}
+      {/* Modal Independente de Bloqueio - Using BlockModal Component */}
         {showNewBlockModal && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-            <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="bg-surface-container-lowest p-8 rounded-3xl shadow-xl max-w-lg w-full border border-outline-variant/20 max-h-[90vh] overflow-y-auto">
-              <div className="flex justify-between items-center mb-6">
-                <h2 className="text-2xl font-headline text-error">Novo Bloqueio / Falta</h2>
-                <button onClick={() => setShowNewBlockModal(false)} className="p-2 hover:bg-surface-container rounded-full text-on-surface-variant"><span className="material-symbols-outlined">close</span></button>
-              </div>
-              <form onSubmit={handleBlockSubmit} className="space-y-4">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                     <div>
-                       <label className="block text-[10px] font-bold text-on-surface-variant tracking-[0.15em] uppercase mb-2">Data do Bloqueio</label>
-                       <input type="date" value={receptionDate} disabled className="w-full bg-surface-container-low border border-outline-variant/20 rounded-xl p-3 text-sm opacity-50 cursor-not-allowed text-on-surface font-bold" />
-                     </div>
-                     <div>
-                       <label className="block text-[10px] font-bold text-on-surface-variant tracking-[0.15em] uppercase mb-2">Profissional Ausente</label>
-                       <select required value={bookEmp} onChange={e => setBookEmp(e.target.value)} className="w-full bg-surface-container-low border border-outline-variant/20 rounded-xl p-3 focus:ring-1 focus:ring-primary text-sm">
-                         <option value="" disabled>Selecione...</option>
-                         {employees.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
-                       </select>
-                     </div>
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                     <div>
-                       <label className="block text-[10px] font-bold text-on-surface-variant tracking-[0.15em] uppercase mb-2">Hora Início</label>
-                       <input required type="time" min="09:00" max="21:00" value={bookTime} onChange={e => setBookTime(e.target.value)} className="w-full bg-surface-container-low border border-outline-variant/20 rounded-xl p-3 focus:ring-1 focus:ring-primary text-sm" />
-                     </div>
-                     <div>
-                       <label className="block text-[10px] font-bold text-on-surface-variant tracking-[0.15em] uppercase mb-2">Hora Fim</label>
-                       <input required type="time" min={bookTime || "09:00"} max="21:00" value={blockEndTime} onChange={e => setBlockEndTime(e.target.value)} className="w-full bg-surface-container-low border border-outline-variant/20 rounded-xl p-3 focus:ring-1 focus:ring-primary text-sm" />
-                     </div>
-                  </div>
-                  <div>
-                     <label className="block text-[10px] font-bold text-on-surface-variant tracking-[0.15em] uppercase mb-2">Motivo (Falta, Pausa, Reunião)</label>
-                     <input required type="text" value={blockReason} onChange={e => setBlockReason(e.target.value)} className="w-full bg-surface-container-low border border-outline-variant/20 rounded-xl p-3 focus:ring-1 focus:ring-primary text-sm" placeholder="Ex: Saiu mais cedo, Almoço..." />
-                  </div>
-                  <button type="submit" className="w-full mt-4 bg-error text-onError py-3 rounded-xl font-bold text-xs uppercase tracking-[0.2em] shadow-sm hover:bg-error/90 transition-all text-white">Salvar Bloqueio / Falta</button>
-                </form>
-            </motion.div>
-          </div>
+          <BlockModal
+            receptionDate={receptionDate}
+            initialTime={bookTime || '09:00'}
+            initialEmpId={bookEmp || ''}
+            employees={employees}
+            appointments={appointments}
+            onClose={() => setShowNewBlockModal(false)}
+            onAddBloqueio={onAddBloqueio}
+            setErrorMessage={setErrorMessage}
+            setToastMessage={setToastMessage}
+          />
         )}
 
         {/* Floating Anamnese Modal */}
