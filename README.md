@@ -1,4 +1,6 @@
 # 🌿 Sistema de Gestão de Spa e Clínica
+<img width="594" height="279" alt="image" src="https://github.com/user-attachments/assets/7b2bbc47-7ee5-4b87-9c73-cd6823de96ef" />
+
 
 Plataforma unificada e moderna para gestão de agendamentos, equipe, clientes e serviços, projetada especificamente para Spas e Clínicas de estética/massoterapia. O sistema oferece uma interface inspirada no **Google Agenda**, com controle de perfis de acesso, formulários de anamnese clínicos e acompanhamento em tempo real.
 
