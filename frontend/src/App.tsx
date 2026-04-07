@@ -17,6 +17,7 @@ import {
   useScaleOverrides,
   useTurnoSwapRequests, useAddTurnoSwapRequest, useUpdateTurnoSwapRequestStatus,
   useSaveScaleOverride, useSwapScaleDays, useReplicateScaleDays,
+  isApiError,
   type ScaleOverridePayload, type ScaleSwapPayload, type ScaleReplicatePayload,
 } from './api'; // Importando os novos hooks
 
@@ -26,7 +27,7 @@ const TVPanelViewLazy = lazy(() => import('./components/TVPanelView').then((modu
 const UpcomingAppointmentsModalLazy = lazy(() => import('./components/UpcomingAppointmentsModal').then((module) => ({ default: module.UpcomingAppointmentsModal })));
 
 const ModuleLoading = ({ label = 'Carregando módulo...' }: { label?: string }) => (
-  <div className="min-h-[240px] flex flex-col items-center justify-center gap-2 text-on-surface-variant">
+  <div className="min-h-60 flex flex-col items-center justify-center gap-2 text-on-surface-variant">
     <span className="material-symbols-outlined text-4xl animate-spin text-primary">progress_activity</span>
     <p className="text-sm font-semibold uppercase tracking-wide">{label}</p>
   </div>
@@ -135,10 +136,10 @@ export default function App() {
 
   // 1. SUBSTITUIÇÃO DOS ESTADOS MANUAIS PELOS HOOKS DO REACT QUERY
   // Os dados, loading e erros agora são gerenciados automaticamente.
-  const { data: employeesData, isLoading: loadingEmployees, isError: errorEmployees } = useEmployees(token);
-  const { data: appointmentsData, isLoading: loadingAppointments, isError: errorAppointments } = useAppointments(token);
-  const { data: services, isLoading: loadingServices, isError: errorServices } = useServices(token);
-  const { data: clients, isLoading: loadingClients, isError: errorClients } = useClients(token);
+  const { data: employeesData, isLoading: loadingEmployees, isError: errorEmployees, error: employeesError } = useEmployees(token);
+  const { data: appointmentsData, isLoading: loadingAppointments, isError: errorAppointments, error: appointmentsError } = useAppointments(token);
+  const { data: services, isLoading: loadingServices, isError: errorServices, error: servicesError } = useServices(token);
+  const { data: clients, isLoading: loadingClients, isError: errorClients, error: clientsError } = useClients(token);
   const { data: scaleOverridesData, isLoading: loadingScaleOverrides } = useScaleOverrides(token);
   const { data: turnoSwapRequestsData, isLoading: loadingTurnoSwaps, isError: errorTurnoSwaps } = useTurnoSwapRequests(token);
 
@@ -160,6 +161,11 @@ export default function App() {
 
   const [activeRoleView, setActiveRoleView] = useState<'supervisor' | 'collaborator' | 'tv'>('collaborator');
   const [showUpcomingAppointments, setShowUpcomingAppointments] = useState(false);
+
+  const hasUnauthorizedBootstrapError = useMemo(() => {
+    const bootstrapErrors = [employeesError, appointmentsError, servicesError, clientsError];
+    return bootstrapErrors.some((error) => isApiError(error) && error.status === 401);
+  }, [employeesError, appointmentsError, servicesError, clientsError]);
 
   // Atualiza a View de segurança baseada no cargo toda vez que o currentUser mudar
   useEffect(() => { if (currentUser) setActiveRoleView(currentUser.role); }, [currentUser]);
@@ -233,6 +239,14 @@ export default function App() {
       window.removeEventListener('unhandledrejection', handleUnhandledRejection);
     };
   }, []);
+
+  useEffect(() => {
+    if (!token || !hasUnauthorizedBootstrapError) return;
+
+    console.warn('[FRONTEND][AUTH] Sessao expirada ou token invalido. Redirecionando para login.');
+    queryClient.clear();
+    handleLogout();
+  }, [token, hasUnauthorizedBootstrapError, queryClient, handleLogout]);
 
   // ATIVA AS BUSCAS INICIAIS E O WEBSOCKET
   useEffect(() => {
@@ -386,25 +400,37 @@ export default function App() {
 
   if (isGlobalLoading) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-[var(--color-background)]">
-        <span className="material-symbols-outlined text-6xl text-[var(--color-primary)] animate-spin mb-4">
+      <div className="min-h-screen flex flex-col items-center justify-center bg-surface">
+        <span className="material-symbols-outlined text-6xl text-primary animate-spin mb-4">
           progress_activity
         </span>
-        <p className="text-xl font-serif text-[var(--color-on-background)] animate-pulse">
+        <p className="text-xl font-serif text-on-surface animate-pulse">
           Carregando dados do sistema...
         </p>
       </div>
     );
   }
 
+  if (hasUnauthorizedBootstrapError) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-surface p-4">
+        <div className="bg-surface-container p-8 rounded-3xl max-w-md text-center shadow-lg border border-outline-variant">
+          <span className="material-symbols-outlined text-5xl text-primary mb-4">lock_clock</span>
+          <h2 className="text-2xl font-bold text-on-surface mb-2">Sessao expirada</h2>
+          <p className="text-on-surface-variant opacity-80">Estamos redirecionando para o login...</p>
+        </div>
+      </div>
+    );
+  }
+
   if (shouldBlockAppOnError) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-[var(--color-background)] p-4">
-        <div className="bg-[var(--color-error-container)] p-8 rounded-3xl max-w-md text-center shadow-lg border border-[var(--color-error)]">
-          <span className="material-symbols-outlined text-5xl text-[var(--color-on-error-container)] mb-4">cloud_off</span>
-          <h2 className="text-2xl font-bold text-[var(--color-on-error-container)] mb-2">Falha na Conexão</h2>
-          <p className="text-[var(--color-on-error-container)] opacity-80 mb-6">Nao foi possivel carregar as informacoes essenciais. Verifique sua conexao com o servidor.</p>
-          <button onClick={() => window.location.reload()} className="bg-[var(--color-error)] text-[var(--color-on-error)] px-6 py-2 rounded-xl font-bold uppercase tracking-wider transition-colors hover:bg-[var(--color-error-dim)]">Tentar Novamente</button>
+      <div className="min-h-screen flex flex-col items-center justify-center bg-surface p-4">
+        <div className="bg-error-container p-8 rounded-3xl max-w-md text-center shadow-lg border border-error">
+          <span className="material-symbols-outlined text-5xl text-on-error-container mb-4">cloud_off</span>
+          <h2 className="text-2xl font-bold text-on-error-container mb-2">Falha na Conexão</h2>
+          <p className="text-on-error-container opacity-80 mb-6">Nao foi possivel carregar as informacoes essenciais. Verifique sua conexao com o servidor.</p>
+          <button onClick={() => window.location.reload()} className="bg-error text-on-error px-6 py-2 rounded-xl font-bold uppercase tracking-wider transition-colors hover:bg-error-dim">Tentar Novamente</button>
         </div>
       </div>
     );
