@@ -5,7 +5,7 @@ import { AnamneseForm, AnamneseData } from '../../../components/AnamneseForm';
 import { formatAnamneseStorage, parseClientObservation } from '../../../utils/anamneseUtils';
 import { useSearch } from '../../../hooks/useSearch';
 import { ConfirmDialog } from '../../../components/ConfirmDialog';
-import { formatCpf } from '../../../utils/formatters';
+import { formatCpf, formatPhone } from '../../../utils/formatters';
 
 interface SupervisorClientesTabProps {
   clients: Client[];
@@ -169,7 +169,7 @@ export function SupervisorClientesTab({ clients, appointments, services, onEditC
                 <tr key={client.id} className="border-t border-outline-variant/10 hover:bg-surface/50">
                   <td className="py-4 px-4 text-sm font-medium text-on-surface">{client.nome}</td>
                   <td className="py-4 px-4 text-sm text-on-surface-variant">{client.cpf ? formatCpf(client.cpf) : '-'}</td>
-                  <td className="py-4 px-4 text-sm text-on-surface-variant">{client.telefone || '-'}</td>
+                  <td className="py-4 px-4 text-sm text-on-surface-variant">{client.telefone ? formatPhone(client.telefone) : '-'}</td>
                   <td className="py-4 px-4 text-xs text-on-surface-variant max-w-xs truncate hidden md:table-cell" title={parseClientObservation(client.observacao).note}>
                     {parseClientObservation(client.observacao).note || 'Nenhuma'}
                   </td>
@@ -274,7 +274,9 @@ export function SupervisorClientesTab({ clients, appointments, services, onEditC
                 <input
                   type="text"
                   value={editingClient.telefone || ''}
-                  onChange={e => setEditingClient({ ...editingClient, telefone: e.target.value })}
+                  onChange={e => setEditingClient({ ...editingClient, telefone: formatPhone(e.target.value) })}
+                  maxLength={15}
+                  placeholder="(00) 00000-0000"
                   className="w-full bg-surface-container-low border border-outline-variant/20 rounded-xl p-3 text-sm focus:ring-1 focus:ring-primary outline-none text-on-surface"
                 />
               </div>
