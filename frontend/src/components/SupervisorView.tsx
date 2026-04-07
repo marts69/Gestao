@@ -54,6 +54,10 @@ const getEligibilitySummary = (service: Service): string => {
   return 'Disponível para qualquer profissional';
 };
 
+const isValidScaleDayType = (value: unknown): value is DiaEscala['tipo'] => (
+  value === 'trabalho' || value === 'folga' || value === 'fds'
+);
+
 type AppointmentCreatePayload = Omit<Appointment, 'id' | 'status'> & {
   cpf?: string;
   clientId?: string;
@@ -226,11 +230,15 @@ export function SupervisorView({ employees, appointments, services, clients, sca
       const next = { ...prev };
       scaleOverrides.forEach((override) => {
         if (!override?.colaboradorId || !override?.data) return;
+
+        const tipo = isValidScaleDayType(override.tipo) ? override.tipo : null;
+        if (!tipo) return;
+
         next[`${override.colaboradorId}:${override.data}`] = {
           colaboradorId: override.colaboradorId,
           data: override.data,
-          tipo: override.tipo,
-          turno: override.turno,
+          tipo,
+          turno: tipo === 'trabalho' ? override.turno : undefined,
           descricao: override.descricao,
         };
       });
@@ -452,6 +460,10 @@ export function SupervisorView({ employees, appointments, services, clients, sca
   const applyOverrideToDia = useCallback((employeeId: string, dia: DiaEscala): DiaEscala => {
     const override = planningOverrides[`${employeeId}:${dia.data}`];
     if (!override) return dia;
+
+    if (!isValidScaleDayType(override.tipo)) {
+      return dia;
+    }
 
     const { horaInicio, horaFim } = splitTurno(override.turno);
     if (override.tipo !== 'trabalho') {

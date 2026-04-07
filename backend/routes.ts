@@ -1209,6 +1209,10 @@ export function createRouter(io: Server) {
       const { colaboradorId, data, tipo, turno, descricao } = req.body;
       if (!colaboradorId || !data) return res.status(400).json({ erro: 'colaboradorId e data são obrigatórios' });
 
+      const normalizedTipo = tipo === 'trabalho' || tipo === 'folga' || tipo === 'fds' ? tipo : 'trabalho';
+      const normalizedTurno = normalizedTipo === 'trabalho' && typeof turno === 'string' ? turno : null;
+      const normalizedDescricao = typeof descricao === 'string' ? descricao : null;
+
       const key = `${colaboradorId}:${data}`;
       const nowDate = new Date();
       const nowIso = nowDate.toISOString();
@@ -1225,7 +1229,7 @@ export function createRouter(io: Server) {
 
           await tx.$executeRaw`
             INSERT INTO "EscalaOverride" ("key", "colaboradorId", "data", "tipo", "turno", "descricao", "atualizadoEm")
-            VALUES (${key}, ${colaboradorId}, ${data}, ${tipo ?? null}, ${turno ?? null}, ${descricao ?? null}, ${nowDate})
+            VALUES (${key}, ${colaboradorId}, ${data}, ${normalizedTipo}, ${normalizedTurno}, ${normalizedDescricao}, ${nowDate})
             ON CONFLICT ("key") DO UPDATE SET "tipo" = EXCLUDED."tipo", "turno" = EXCLUDED."turno", "descricao" = EXCLUDED."descricao", "atualizadoEm" = EXCLUDED."atualizadoEm";
           `;
 
@@ -1240,7 +1244,7 @@ export function createRouter(io: Server) {
         // fallback para JSON store
         const overrides = await loadOverrides();
         const idx = overrides.findIndex((o: any) => o.key === key);
-        const entry = { key, colaboradorId, data, tipo: tipo || null, turno: turno || null, descricao: descricao || null, atualizadoEm: nowIso };
+        const entry = { key, colaboradorId, data, tipo: normalizedTipo, turno: normalizedTurno, descricao: normalizedDescricao, atualizadoEm: nowIso };
         if (idx >= 0) overrides[idx] = { ...overrides[idx], ...entry }; else overrides.push(entry);
         await saveOverrides(overrides);
         notifyClients();
@@ -1264,6 +1268,15 @@ export function createRouter(io: Server) {
       const nowIso = nowDate.toISOString();
       const fromSnapshot = normalizeScaleSnapshot(from.snapshot);
       const toSnapshot = normalizeScaleSnapshot(to.snapshot);
+      const normalizeTipo = (value: unknown): 'trabalho' | 'folga' | 'fds' => {
+        if (value === 'trabalho' || value === 'folga' || value === 'fds') return value;
+        return 'trabalho';
+      };
+
+      const normalizeTurno = (tipo: 'trabalho' | 'folga' | 'fds', value: unknown): string | null => {
+        if (tipo !== 'trabalho') return null;
+        return typeof value === 'string' ? value : null;
+      };
 
       try {
         const result = await runSerializableTransaction(async (tx) => {
@@ -1278,19 +1291,33 @@ export function createRouter(io: Server) {
           const toRows: any = await tx.$queryRaw`SELECT * FROM "EscalaOverride" WHERE "key" = ${toKey}`;
           const fromVal = fromRows[0] || {
             key: fromKey,
-            tipo: fromSnapshot?.tipo ?? null,
-            turno: fromSnapshot?.turno ?? null,
+            tipo: fromSnapshot?.tipo ?? 'trabalho',
+            turno: fromSnapshot?.tipo === 'trabalho' ? (fromSnapshot?.turno ?? null) : null,
             descricao: fromSnapshot?.descricao ?? null,
           };
           const toVal = toRows[0] || {
             key: toKey,
-            tipo: toSnapshot?.tipo ?? null,
-            turno: toSnapshot?.turno ?? null,
+            tipo: toSnapshot?.tipo ?? 'trabalho',
+            turno: toSnapshot?.tipo === 'trabalho' ? (toSnapshot?.turno ?? null) : null,
             descricao: toSnapshot?.descricao ?? null,
           };
 
-          const newFrom = { ...fromVal, tipo: toVal.tipo, turno: toVal.turno, descricao: toVal.descricao, atualizadoEm: nowIso };
-          const newTo = { ...toVal, tipo: fromVal.tipo, turno: fromVal.turno, descricao: fromVal.descricao, atualizadoEm: nowIso };
+          const fromTipo = normalizeTipo(fromVal.tipo);
+          const toTipo = normalizeTipo(toVal.tipo);
+          const newFrom = {
+            ...fromVal,
+            tipo: toTipo,
+            turno: normalizeTurno(toTipo, toVal.turno),
+            descricao: typeof toVal.descricao === 'string' ? toVal.descricao : null,
+            atualizadoEm: nowIso,
+          };
+          const newTo = {
+            ...toVal,
+            tipo: fromTipo,
+            turno: normalizeTurno(fromTipo, fromVal.turno),
+            descricao: typeof fromVal.descricao === 'string' ? fromVal.descricao : null,
+            atualizadoEm: nowIso,
+          };
 
           await tx.$executeRaw`
             INSERT INTO "EscalaOverride" ("key","colaboradorId","data","tipo","turno","descricao","atualizadoEm")
@@ -1321,8 +1348,8 @@ export function createRouter(io: Server) {
               key: fromKey,
               colaboradorId: from.colaboradorId,
               data: from.data,
-              tipo: fromSnapshot?.tipo ?? null,
-              turno: fromSnapshot?.turno ?? null,
+              tipo: fromSnapshot?.tipo ?? 'trabalho',
+              turno: fromSnapshot?.tipo === 'trabalho' ? (fromSnapshot?.turno ?? null) : null,
               descricao: fromSnapshot?.descricao ?? null,
             };
         const toVal = toIdx >= 0
@@ -1331,12 +1358,26 @@ export function createRouter(io: Server) {
               key: toKey,
               colaboradorId: to.colaboradorId,
               data: to.data,
-              tipo: toSnapshot?.tipo ?? null,
-              turno: toSnapshot?.turno ?? null,
+              tipo: toSnapshot?.tipo ?? 'trabalho',
+              turno: toSnapshot?.tipo === 'trabalho' ? (toSnapshot?.turno ?? null) : null,
               descricao: toSnapshot?.descricao ?? null,
             };
-        const newFrom = { ...fromVal, tipo: toVal.tipo, turno: toVal.turno, descricao: toVal.descricao, atualizadoEm: nowIso };
-        const newTo = { ...toVal, tipo: fromVal.tipo, turno: fromVal.turno, descricao: fromVal.descricao, atualizadoEm: nowIso };
+        const fromTipo = normalizeTipo(fromVal.tipo);
+        const toTipo = normalizeTipo(toVal.tipo);
+        const newFrom = {
+          ...fromVal,
+          tipo: toTipo,
+          turno: normalizeTurno(toTipo, toVal.turno),
+          descricao: typeof toVal.descricao === 'string' ? toVal.descricao : null,
+          atualizadoEm: nowIso,
+        };
+        const newTo = {
+          ...toVal,
+          tipo: fromTipo,
+          turno: normalizeTurno(fromTipo, fromVal.turno),
+          descricao: typeof fromVal.descricao === 'string' ? fromVal.descricao : null,
+          atualizadoEm: nowIso,
+        };
         if (fromIdx >= 0) overrides[fromIdx] = newFrom; else overrides.push(newFrom);
         if (toIdx >= 0) overrides[toIdx] = newTo; else overrides.push(newTo);
         await saveOverrides(overrides);

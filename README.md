@@ -133,7 +133,10 @@ Se o sistema pedir confianca do atalho `.desktop`, marque como "Permitir execuca
 - Split frontend/backend concluido.
 - Refatoracao por features em andamento com entregas principais aplicadas.
 - Pendencias de consolidacao:
-   - reduzir `any` residual em `SupervisorView`
+   - filtrar agenda para destacar somente profissionais em folga (regra final de exibicao)
+   - bloquear automaticamente agendamento em dia marcado como folga
+   - permitir ajuste de horario de trabalho pelo Supervisor com persistencia na listagem
+   - continuar saneamento de `any` residual em `SupervisorView`
    - finalizar adocao de hooks/contexto compartilhado em todos os fluxos do Supervisor
 
 ## Documentacao relacionada

@@ -290,6 +290,33 @@ export interface ScaleReplicatePayload {
   source?: ScaleDaySnapshot;
 }
 
+const normalizeScaleDayType = (value: unknown): ScaleDayType | null => {
+  if (value === 'trabalho' || value === 'folga' || value === 'fds') return value;
+  return null;
+};
+
+const normalizeScaleOverridePayload = (value: unknown): ScaleOverridePayload | null => {
+  if (!value || typeof value !== 'object') return null;
+
+  const row = value as Record<string, unknown>;
+  const colaboradorId = typeof row.colaboradorId === 'string' ? row.colaboradorId : '';
+  const data = typeof row.data === 'string' ? row.data : '';
+  const tipo = normalizeScaleDayType(row.tipo);
+
+  if (!colaboradorId || !data || !tipo) return null;
+
+  const turno = tipo === 'trabalho' && typeof row.turno === 'string' ? row.turno : undefined;
+  const descricao = typeof row.descricao === 'string' ? row.descricao : undefined;
+
+  return {
+    colaboradorId,
+    data,
+    tipo,
+    turno,
+    descricao,
+  };
+};
+
 // =======================
 // AGENDAMENTOS
 // =======================
@@ -468,7 +495,11 @@ export const useScaleOverrides = (
     if (params?.colaboradorId) search.set('colaboradorId', params.colaboradorId);
     const suffix = search.toString() ? `?${search.toString()}` : '';
     const result = await fetchApi(`/escala/overrides${suffix}`, token);
-    return Array.isArray(result) ? (result as ScaleOverridePayload[]) : [];
+    if (!Array.isArray(result)) return [];
+
+    return result
+      .map((item) => normalizeScaleOverridePayload(item))
+      .filter((item): item is ScaleOverridePayload => Boolean(item));
   },
   enabled: !!token,
 });

@@ -1,5 +1,13 @@
 # 🎉 SISTEMA DE ESCALAS CLT - DELIVERABLES
 
+## 🔎 Atualização de Status (07/04/2026)
+
+Situação atual após revisão de backlog e documentação:
+
+- O pacote base continua entregue e funcional.
+- Existem pendências operacionais abertas na agenda/escala para fechamento da consolidação.
+- A documentação histórica foi preservada, mas parte dos checklists precisa atualização para refletir o estado real do split frontend/backend.
+
 ## 📦 O Que Você Recebeu
 
 ```
@@ -235,7 +243,11 @@ import {
 
 **Próximo passo:** Atualizar types.ts (15 min)
 
-**Bloqueadores:** Nenhum - tudo está pronto!
+**Bloqueadores atuais:**
+1. Filtrar agenda para destacar somente colaboradores em folga (regra final de produto).
+2. Bloqueio automático/manual quando colaborador estiver em folga.
+3. Ajuste de horários de trabalho pelo Supervisor com persistência na listagem.
+4. Concluir padronização dos documentos `.md` legados para evitar status divergente.
 
 ---
 
@@ -255,7 +267,7 @@ import {
 
 ---
 
-**Status:** 🟢 PRONTO PARA IMPLEMENTAÇÃO  
+**Status:** 🟡 EM CONSOLIDAÇÃO  
 **Data:** 2026-04-03  
 **Versão:** 1.0 - Foundation Complete  
 **Próximo:** FASE 1 - types.ts + UI Integration  

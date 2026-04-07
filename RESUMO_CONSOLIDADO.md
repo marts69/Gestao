@@ -7,7 +7,7 @@ Itens reportados e incorporados nesta revisão:
 - [ ] Agendamento: mostrar somente quem está de folga (definir regra final de exibição na agenda).
 - [ ] Bloqueio automático/manual para pessoa que está de folga na data.
 - [ ] Supervisor alterar horários de trabalho e manter na listagem operacional.
-- [ ] Corrigir erro ao trocar folga que reinicia o site.
+- [x] Corrigido: troca de folga com normalização defensiva de override para evitar estado inválido e reinício da UI.
 - [x] Corrigido: sessão ao recarregar página não deve mais voltar para login.
 - [x] Entregue: função de Clientes disponível dentro do Portal do Supervisor.
 - [x] Ajustado texto de interface: "Portal da Supervisão" para "Portal do Supervisor".
@@ -15,6 +15,14 @@ Itens reportados e incorporados nesta revisão:
 Observação:
 Os três itens marcados como concluídos acima já foram aplicados no frontend.
 Os demais itens permanecem no backlog funcional para implementação da próxima etapa.
+
+## 🧾 Auditoria de Markdown (07/04/2026)
+
+Resultado da revisão dos arquivos `.md` do projeto:
+
+- [ ] Padronizar documentação legada para estrutura atual `frontend/` e `backend/` (há referências antigas em guias históricos).
+- [ ] Revisar checklists antigos que ainda mostram status "não iniciado" para itens já entregues na fase de split/migração.
+- [ ] Consolidar um backlog único para evitar duplicidade entre `RESUMO_CONSOLIDADO.md`, `ESCALA_FEATURES.md` e `IMPLEMENTATION_CHECKLIST.md`.
 
 ## 🎯 O Que Foi Entregue
 
