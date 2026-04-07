@@ -304,13 +304,40 @@ export function DashboardEscalas({ employees, appointments }) {
 
 ## Próximas Etapas de Integração
 
-1. **Atualizar types.ts** com novos campos de Employee
-2. **Expandir formulário** de colaborador em SupervisorEquipeTab
-3. **Adicionar aba "Escalas"** com visualização em calendário
-4. **Criar modal de troca** de turno
-5. **Adicionar dashboard** de conformidade CLT
-6. **Implementar alertas** em tempo real
+1. [x] **Atualizar types.ts** com novos campos de Employee
+2. [x] **Expandir formulário** de colaborador em SupervisorEquipeTab
+3. [x] **Adicionar aba "Escalas"** com visualização em calendário
+4. [x] **Criar modal de troca** de turno
+5. [x] **Adicionar dashboard** de conformidade CLT
+6. [x] **Implementar alertas** em tempo real
 
 ---
 
-**Status:** 🟠 Código Utils Pronto - Aguardando Integração na UI
+**Status:** ✅ Integração principal de Escalas concluída na UI (Tipos, Formulário, Calendário, Troca, Dashboard e Alertas CLT)
+
+## Ajuste de Escala Dominical (Configuração de Folgas)
+
+- [x] Suporte ao tipo de escala `5x1` adicionado.
+- [x] Campo por colaborador para `folgasDomingoNoMes` implementado (ex.: 2 folgas no domingo por mês).
+- [x] Aplicação automática da regra no calendário de escalas da supervisão.
+- [x] Persistência no backend (`colaborador`) preparada.
+
+## Persistência de Troca de Turno (Backend + Frontend)
+
+- [x] Rota para listar solicitações: `GET /api/trocas-turno`
+- [x] Rota para criar solicitação: `POST /api/trocas-turno`
+- [x] Rota para aprovar/rejeitar: `PATCH /api/trocas-turno/:id/status`
+- [x] Hook de listagem no frontend (`useTurnoSwapRequests`)
+- [x] Hook de criação no frontend (`useAddTurnoSwapRequest`)
+- [x] Hook de atualização de status no frontend (`useUpdateTurnoSwapRequestStatus`)
+- [x] Integração no colaborador para enviar solicitação
+- [x] Integração no supervisor para aprovar/rejeitar pendências
+
+### Passo operacional pendente
+
+- [ ] Aplicar migração Prisma no ambiente alvo para materializar a tabela/colunas novas:
+
+```bash
+npx prisma migrate deploy
+npx prisma generate
+```

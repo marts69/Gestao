@@ -1,0 +1,106 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+
+model Colaborador {
+  id            String        @id @default(uuid())
+  nome          String
+  email         String?       @unique
+  senha         String?
+  especialidade String
+  cargo         String?
+  tipoEscala    String?       @default("6x1")
+  folgasDomingoNoMes Int?     @default(2)
+  cargaHorariaSemanal Int?    @default(40)
+  habilidades   String[]      @default([])
+  papel         String        @default("collaborator")
+  ativo         Boolean       @default(true)
+  diasTrabalho  String?       @default("1,2,3,4,5,6")
+  agendamentos  Agendamento[]
+  bloqueios     Bloqueio[]
+  trocasTurno   SolicitacaoTroca[]
+  escalaOverrides EscalaOverride[]
+}
+
+model Cliente {
+  id           String        @id @default(uuid())
+  nome         String
+  telefone     String?
+  cpf          String?
+  observacao   String?
+  agendamentos Agendamento[]
+}
+
+model Servico {
+  id                   String        @id @default(uuid())
+  nome                 String        @unique
+  preco                Float
+  duracao              Int?          @default(60)
+  icone                String?       @default("spa")
+  modoElegibilidade    String        @default("livre")
+  cargosPermitidos     String[]      @default([])
+  habilidadesPermitidas String[]     @default([])
+  agendamentos         Agendamento[]
+}
+
+model Agendamento {
+  id            String      @id @default(uuid())
+  data          DateTime
+  status        String?     @default("scheduled")
+  colaboradorId String
+  clienteId     String
+  
+  colaborador   Colaborador @relation(fields: [colaboradorId], references: [id])
+  cliente       Cliente     @relation(fields: [clienteId], references: [id])
+  servicos      Servico[]
+}
+
+model Bloqueio {
+  id            String      @id @default(uuid())
+  data          String
+  horaInicio    String
+  horaFim       String
+  motivo        String
+  colaboradorId String
+
+  colaborador   Colaborador @relation(fields: [colaboradorId], references: [id])
+}
+
+model SolicitacaoTroca {
+  id                String      @id @default(uuid())
+  colaboradorId      String
+  dataOriginal       String
+  dataSolicitada     String
+  motivo             String
+  status             String      @default("pendente")
+  respostaObservacao String?
+  respondidoPorId    String?
+  criadoEm           DateTime    @default(now())
+  atualizadoEm       DateTime    @updatedAt
+
+  colaborador        Colaborador @relation(fields: [colaboradorId], references: [id])
+
+  @@index([colaboradorId])
+  @@index([status])
+}
+
+model EscalaOverride {
+  key           String      @id
+  colaboradorId String
+  data          String
+  tipo          String?
+  turno         String?
+  descricao     String?
+  atualizadoEm  DateTime    @updatedAt
+
+  colaborador   Colaborador @relation(fields: [colaboradorId], references: [id])
+
+  @@index([colaboradorId])
+  @@index([data])
+}

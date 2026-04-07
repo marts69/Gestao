@@ -1,0 +1,14 @@
+{
+  "name": "gestao-frontend",
+  "private": true,
+  "version": "1.0.0-alpha",
+  "type": "module",
+  "scripts": {
+    "dev": "node ../node_modules/vite/bin/vite.js --port=3000 --host=0.0.0.0",
+    "build": "node ../node_modules/vite/bin/vite.js build",
+    "preview": "node ../node_modules/vite/bin/vite.js preview",
+    "lint": "node ../node_modules/typescript/bin/tsc --noEmit",
+    "test:watch": "node ../node_modules/vitest/vitest.mjs",
+    "test:unit": "node ../node_modules/vitest/vitest.mjs run"
+  }
+}

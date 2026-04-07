@@ -1,0 +1,72 @@
+name: CI
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+    branches: [master, main]
+
+jobs:
+  unit-and-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run test:unit
+      - run: npm run build
+
+  e2e:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        ports:
+          - 5432:5432
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: gestao_ci
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/gestao_ci
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+      - run: npm ci
+      - run: npx prisma generate
+      - run: npx prisma migrate deploy
+      - run: npx tsx prisma/seed.ci.ts
+      - run: npx playwright install chromium --with-deps
+      - name: Start API and Vite
+        run: |
+          npx tsx server.ts &
+          npm run dev -- --port 3000 --host 127.0.0.1 &
+          for i in $(seq 1 60); do
+            ui=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:3000/ || true)
+            api=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:3333/api/colaboradores || true)
+            if [ "$ui" = "200" ] && [ "$api" = "401" ]; then
+              echo "stack ok (ui 200, api 401 sem token)"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "timeout waiting for ports 3000/3333"
+          exit 1
+      - name: Playwright
+        env:
+          PLAYWRIGHT_SKIP_WEBSERVER: '1'
+          PLAYWRIGHT_BASE_URL: 'http://127.0.0.1:3000'
+          PLAYWRIGHT_API_URL: 'http://127.0.0.1:3333/api'
+        run: npx playwright test

@@ -1,0 +1,294 @@
+import React, { createContext, useContext } from 'react';
+import { Appointment, Employee, Service } from '../types';
+import { getDuration, matchesAppointmentSearch } from '../features/appointments/utils/appointmentCore';
+
+export interface ScheduleGridContext {
+  receptionDate: string;
+  scheduleSearchTerm: string;
+  resourceFilter: 'all' | 'sala_massagem' | 'ofuro' | 'estetica';
+  appointments: Appointment[];
+  services: Service[];
+  startHour: number;
+  endHour: number;
+  minuteHeight: number;
+  hourHeight: number;
+  isTodayView: boolean;
+  currentMinute: Date;
+  todayStr: string;
+  employeeUnavailableReasons?: Record<string, string>;
+}
+
+export interface ScheduleGridActions {
+  onGridClick: (e: React.MouseEvent<HTMLDivElement>, empId: string) => void;
+  onDeleteBloqueio?: (id: string) => Promise<boolean | void> | void;
+  onReassignAppointment?: (appointmentId: string, newEmployeeId: string) => Promise<boolean | void> | void;
+  onCompleteAppointment: (id: string) => void;
+  onEditAppointmentClick: (appointment: Appointment) => void;
+  onDeleteAppointmentClick: (id: string) => void;
+  setToastMessage: (msg: string | null) => void;
+  setErrorMessage: (msg: string | null) => void;
+}
+
+interface EmployeeScheduleColumnProps {
+  emp: Employee;
+}
+
+interface ScheduleGridProviderProps {
+  schedule: ScheduleGridContext;
+  actions: ScheduleGridActions;
+  children: React.ReactNode;
+}
+
+const ScheduleGridContextInternal = createContext<{ schedule: ScheduleGridContext; actions: ScheduleGridActions } | null>(null);
+
+export const ScheduleGridProvider = ({ schedule, actions, children }: ScheduleGridProviderProps) => {
+  return (
+    <ScheduleGridContextInternal.Provider value={{ schedule, actions }}>
+      {children}
+    </ScheduleGridContextInternal.Provider>
+  );
+};
+
+export const EmployeeScheduleColumn = React.memo(({ emp }: EmployeeScheduleColumnProps) => {
+  const gridContext = useContext(ScheduleGridContextInternal);
+  if (!gridContext) {
+    throw new Error('EmployeeScheduleColumn deve ser usado dentro de ScheduleGridProvider.');
+  }
+
+  const { schedule, actions } = gridContext;
+  const {
+    receptionDate,
+    scheduleSearchTerm,
+    resourceFilter,
+    appointments,
+    services,
+    startHour,
+    endHour,
+    minuteHeight,
+    hourHeight,
+    isTodayView,
+    currentMinute,
+    todayStr,
+    employeeUnavailableReasons,
+  } = schedule;
+  const {
+    onGridClick,
+    onDeleteBloqueio,
+    onReassignAppointment,
+    onCompleteAppointment,
+    onEditAppointmentClick,
+    onDeleteAppointmentClick,
+    setToastMessage,
+    setErrorMessage,
+  } = actions;
+
+  const unavailableReason = employeeUnavailableReasons?.[emp.id] || null;
+  const isUnavailable = Boolean(unavailableReason);
+
+  const matchesResourceFilter = (appointment: Appointment) => {
+    if (resourceFilter === 'all') return true;
+    const haystack = `${appointment.observation || ''} ${appointment.services.join(' ')}`.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+
+    if (resourceFilter === 'sala_massagem') {
+      return haystack.includes('sala de massagem') || haystack.includes('massagem');
+    }
+    if (resourceFilter === 'ofuro') {
+      return haystack.includes('ofuro') || haystack.includes('ofurô');
+    }
+    if (resourceFilter === 'estetica') {
+      return haystack.includes('estetica') || haystack.includes('estética') || haystack.includes('limpeza de pele');
+    }
+
+    return true;
+  };
+
+  const empAppointments = appointments
+    .filter((a) => a.date === receptionDate && a.assignedEmployeeId === emp.id)
+    .filter((a) => matchesAppointmentSearch(a, scheduleSearchTerm))
+    .filter((a) => matchesResourceFilter(a));
+
+  const empBlockers = (emp.bloqueios || []).filter((b) => b.data === receptionDate);
+
+  const handleDropOnColumn = async (event: React.DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+
+    if (isUnavailable) {
+      setErrorMessage(`Nao foi possivel mover para ${emp.name}: ${unavailableReason}.`);
+      return;
+    }
+
+    const appointmentId = event.dataTransfer.getData('text/plain');
+    if (!appointmentId || !onReassignAppointment) return;
+
+    const draggedAppointment = appointments.find((appointment) => appointment.id === appointmentId);
+    if (!draggedAppointment || draggedAppointment.assignedEmployeeId === emp.id) return;
+
+    const success = await onReassignAppointment(appointmentId, emp.id);
+    if (success !== false) {
+      setToastMessage(`Agendamento movido para ${emp.name}.`);
+      setTimeout(() => setToastMessage(null), 2500);
+    }
+  };
+
+  return (
+    <div
+      onClick={(e) => onGridClick(e, emp.id)}
+      onDragOver={(event) => event.preventDefault()}
+      onDrop={(event) => {
+        void handleDropOnColumn(event);
+      }}
+      className={`flex-1 min-w-[220px] border-r border-outline-variant/10 relative transition-colors ${isUnavailable ? 'cursor-not-allowed bg-error/5' : 'cursor-pointer hover:bg-primary/5'}`}
+      style={{ height: (endHour - startHour + 1) * hourHeight }}
+    >
+      {isUnavailable && (
+        <div className="absolute inset-0 pointer-events-none z-0 border border-error/10"></div>
+      )}
+
+      {empBlockers.map((bloq) => {
+        const [sH, sM] = bloq.horaInicio.split(':').map(Number);
+        const [eH, eM] = bloq.horaFim.split(':').map(Number);
+        const top = ((sH - startHour) * 60 + sM) * minuteHeight;
+        const endTop = ((eH - startHour) * 60 + eM) * minuteHeight;
+        const height = Math.max(endTop - top, 20);
+
+        return (
+          <div
+            key={bloq.id}
+            className="absolute left-1 right-1 bg-surface-container-high/60 backdrop-blur-sm rounded-lg border border-outline-variant/30 flex items-center justify-center group overflow-hidden"
+            style={{ top, height }}
+          >
+            <div className="absolute inset-0 opacity-10 repeating-linear-gradient-45 from-transparent to-on-surface-variant"></div>
+            <span className="text-[10px] font-bold tracking-widest uppercase text-on-surface-variant z-10 truncate px-2">{bloq.motivo}</span>
+            {onDeleteBloqueio && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onDeleteBloqueio(bloq.id);
+                }}
+                className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 p-1 text-on-surface hover:text-error bg-surface shadow-sm rounded-full z-20 transition-all"
+              >
+                <span className="material-symbols-outlined text-[14px]">delete</span>
+              </button>
+            )}
+          </div>
+        );
+      })}
+
+      {empAppointments.map((app) => {
+        const isCompleted = app.status === 'completed';
+        const appDateTime = new Date(`${app.date}T${app.time}:00`);
+        const isPastDay = app.date < todayStr;
+        const isNoShow = !isCompleted && isPastDay;
+
+        const [appH, appM] = app.time.split(':').map(Number);
+        const top = ((appH - startHour) * 60 + appM) * minuteHeight;
+        const durationMins = getDuration(app.services, services);
+        const height = Math.max(durationMins * minuteHeight, 30);
+        const delayMinutes = (!isCompleted && isTodayView && currentMinute > appDateTime)
+          ? Math.floor((currentMinute.getTime() - appDateTime.getTime()) / 60000)
+          : 0;
+
+        const startTime = appDateTime.getTime();
+        const endTime = startTime + durationMins * 60 * 1000;
+        const nowTime = currentMinute.getTime();
+        const fifteenMinutes = 15 * 60 * 1000;
+
+        let visualStatus: 'agendado' | 'aguardando' | 'em_atendimento' | 'finalizado' | 'falta' = 'agendado';
+        if (isCompleted) {
+          visualStatus = 'finalizado';
+        } else if (isNoShow) {
+          visualStatus = 'falta';
+        } else if (isTodayView) {
+          if (nowTime < startTime - fifteenMinutes) {
+            visualStatus = 'agendado';
+          } else if (nowTime >= startTime - fifteenMinutes && nowTime < startTime) {
+            visualStatus = 'aguardando';
+          } else if (nowTime >= startTime && nowTime <= endTime) {
+            visualStatus = 'em_atendimento';
+          } else if (nowTime > endTime) {
+            visualStatus = 'falta';
+          }
+        }
+
+        const statusClassMap = {
+          agendado: {
+            card: 'bg-amber-500/15 border-amber-400/45 shadow-sm',
+            side: 'bg-amber-400',
+            text: 'text-amber-300',
+          },
+          aguardando: {
+            card: 'bg-sky-500/15 border-sky-400/45 shadow-sm',
+            side: 'bg-sky-400',
+            text: 'text-sky-300',
+          },
+          em_atendimento: {
+            card: 'bg-emerald-500/15 border-emerald-400/45 shadow-sm',
+            side: 'bg-emerald-400',
+            text: 'text-emerald-300',
+          },
+          finalizado: {
+            card: 'bg-surface-container-low/80 border-outline-variant/30 opacity-75',
+            side: 'bg-outline-variant/60',
+            text: 'text-outline-variant line-through',
+          },
+          falta: {
+            card: 'bg-error-container/25 border-error/45 shadow-sm',
+            side: 'bg-error',
+            text: 'text-error',
+          },
+        } as const;
+
+        const visualStyle = statusClassMap[visualStatus];
+        const cardStatusClass = visualStyle.card;
+        const sideColorClass = visualStyle.side;
+
+        return (
+          <div
+            key={app.id}
+            draggable
+            onDragStart={(event) => {
+              event.dataTransfer.effectAllowed = 'move';
+              event.dataTransfer.setData('text/plain', app.id);
+            }}
+            className={`absolute left-1 right-1 rounded-xl border ${cardStatusClass} flex flex-col group overflow-hidden transition-all hover:z-20`}
+            style={{ top, height }}
+          >
+            <div className={`absolute top-0 bottom-0 left-0 w-1 ${sideColorClass}`}></div>
+            <div className="pl-2 pr-1 py-1 flex flex-col h-full">
+              <div className="flex justify-between items-start">
+                <span className={`text-[10px] font-bold leading-none ${visualStyle.text}`}>{app.time}</span>
+                <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity bg-surface-container-lowest/90 rounded-full shadow-sm p-0.5 border border-outline-variant/20 absolute right-1 top-1 z-30">
+                  {!isCompleted && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onCompleteAppointment(app.id);
+                        setToastMessage('Ok!');
+                        setTimeout(() => setToastMessage(null), 2000);
+                      }}
+                      className="text-on-surface-variant hover:text-primary p-1 rounded-full"
+                    >
+                      <span className="material-symbols-outlined text-[14px]">check_circle</span>
+                    </button>
+                  )}
+                  <button onClick={(e) => { e.stopPropagation(); onEditAppointmentClick(app); }} className="text-on-surface-variant hover:text-primary p-1 rounded-full"><span className="material-symbols-outlined text-[14px]">edit</span></button>
+                  <button onClick={(e) => { e.stopPropagation(); onDeleteAppointmentClick(app.id); }} className="text-on-surface-variant hover:text-error p-1 rounded-full"><span className="material-symbols-outlined text-[14px]">cancel</span></button>
+                </div>
+              </div>
+              <h5 className="font-bold text-on-surface text-[11px] leading-tight truncate mt-0.5" title={app.clientName}>{app.clientName}</h5>
+              {height > 40 && <p className="text-[9px] text-on-surface-variant leading-tight line-clamp-2 mt-0.5" title={app.services.join(', ')}>{app.services.join(', ')}</p>}
+              {height > 60 && app.observation && <p className="text-[8px] text-on-surface-variant my-1 italic border-l-2 border-outline-variant/30 pl-1.5 line-clamp-1">{app.observation}</p>}
+              {height > 50 && (
+                <div className="mt-auto flex gap-1 pt-1 border-t border-outline-variant/10">
+                  <span className="bg-surface-container text-on-surface-variant text-[8px] px-1 rounded font-bold uppercase tracking-wide">{visualStatus.replace('_', ' ')}</span>
+                  {delayMinutes > 0 && <span className="bg-error/10 text-error text-[8px] px-1 rounded font-bold">{delayMinutes}m atraso</span>}
+                  {isNoShow && <span className="bg-error/10 text-error text-[8px] px-1 rounded font-bold">Falta</span>}
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+});

@@ -1,0 +1,91 @@
+import React, { useMemo } from 'react';
+import { Appointment, Employee } from '../../../types';
+import { getLocalTodayString } from '../../appointments/utils/appointmentCore';
+import { analisarConformidadeCLT } from '../../../utils/cltValidator';
+import { calcularHorasEscala, gerarEscala } from '../../../utils/escalaCalculator';
+
+interface DashboardEscalasProps {
+  employees: Employee[];
+  appointments: Appointment[];
+}
+
+export function DashboardEscalas({ employees, appointments }: DashboardEscalasProps) {
+  const metrics = useMemo(() => {
+    const activeEmployees = employees.filter((emp) => emp.id !== 'admin');
+    const referenceDate = getLocalTodayString();
+
+    const rows = activeEmployees.map((emp) => {
+      const escala = gerarEscala(
+        {
+          tipo: emp.tipoEscala || '6x1',
+          dataInicio: referenceDate,
+        },
+        28,
+      );
+
+      const horas = calcularHorasEscala(escala).horasTrabalhadas;
+      const analise = analisarConformidadeCLT(
+        appointments.filter((app) => app.assignedEmployeeId === emp.id),
+        emp.bloqueios || [],
+        referenceDate,
+      );
+
+      return {
+        id: emp.id,
+        nome: emp.name,
+        horas,
+        conforme: analise.statusGeral,
+      };
+    });
+
+    const mediaHoras = rows.length > 0
+      ? rows.reduce((sum, row) => sum + row.horas, 0) / rows.length
+      : 0;
+
+    const alertas = rows.filter((row) => !row.conforme).length;
+
+    return {
+      rows,
+      mediaHoras,
+      alertas,
+      totalColaboradores: rows.length,
+    };
+  }, [appointments, employees]);
+
+  return (
+    <div className="bg-surface-container-lowest p-6 rounded-3xl border border-outline-variant/10 shadow-sm">
+      <h3 className="text-lg font-headline text-primary mb-4">Dashboard de Escalas</h3>
+
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-5">
+        <div className="rounded-2xl border border-outline-variant/20 bg-surface-container-low p-4">
+          <p className="text-[10px] font-bold uppercase tracking-widest text-outline">Horas Medias (28d)</p>
+          <p className="text-2xl font-headline text-primary mt-1">{metrics.mediaHoras.toFixed(1)}h</p>
+        </div>
+
+        <div className="rounded-2xl border border-outline-variant/20 bg-surface-container-low p-4">
+          <p className="text-[10px] font-bold uppercase tracking-widest text-outline">Colaboradores</p>
+          <p className="text-2xl font-headline text-primary mt-1">{metrics.totalColaboradores}</p>
+        </div>
+
+        <div className="rounded-2xl border border-outline-variant/20 bg-surface-container-low p-4">
+          <p className="text-[10px] font-bold uppercase tracking-widest text-outline">Alertas CLT</p>
+          <p className="text-2xl font-headline text-error mt-1">{metrics.alertas}</p>
+        </div>
+      </div>
+
+      <div className="space-y-2 max-h-56 overflow-y-auto custom-scrollbar pr-1">
+        {metrics.rows.map((row) => (
+          <div key={row.id} className="rounded-xl border border-outline-variant/20 bg-surface-container-low px-3 py-2 flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-sm font-bold text-on-surface truncate">{row.nome}</p>
+              <p className="text-[10px] uppercase tracking-widest text-on-surface-variant">{row.horas.toFixed(1)}h no ciclo</p>
+            </div>
+            <span className={`text-[10px] font-bold uppercase tracking-widest px-2 py-1 rounded-full ${row.conforme ? 'bg-primary-container text-primary' : 'bg-error-container text-error'}`}>
+              {row.conforme ? 'Conforme' : 'Alerta'}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}

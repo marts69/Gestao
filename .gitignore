@@ -8,3 +8,27 @@ coverage/
 !.env.example
 
 /src/generated/prisma
+
+# Playwright / Vitest artefatos locais
+test-results/
+playwright-report/
+playwright/.cache/
+
+# Artefatos locais de execucao E2E
+e2e-*.code
+e2e-*.json
+e2e-*.txt
+e2e-*.err
+e2e-*.trace
+e2e-*.log
+.playwright-booking.*
+proc-snapshot.txt
+ps-e2e*.txt
+bg_test_marker.txt
+e2e-clean.marker
+google-chrome-stable_current_x86_64.rpm*
+
+# Configuracoes locais de editor e launchers
+.cursor/
+.vscode/
+Gestao-*.desktop

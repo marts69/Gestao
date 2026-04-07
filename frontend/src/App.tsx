@@ -1,0 +1,503 @@
+import React, { Suspense, lazy, useEffect, useState, useCallback, useMemo } from 'react';
+import { flushSync } from 'react-dom';
+import { Layout } from './components/Layout';
+import { useQueryClient } from '@tanstack/react-query';
+import { getBrazilCurrentMinuteOfDay, getLocalTodayString } from './features/appointments/utils/appointmentCore';
+import { useAuth } from './AuthContext';
+import { LoginView } from './components/LoginView';
+import io from 'socket.io-client';
+import { getSocketUrl } from './config/api';
+import { Employee, Appointment, Service, Client, TurnoSwapRequest, TurnoSwapStatus, ServiceEligibilityMode } from './types'; // Tipos mais fortes
+import {
+  useAppointments, useAddAppointment, useCompleteAppointment, useReassignAppointment, useEditAppointment, useDeleteAppointment,
+  useEmployees, useAddEmployee, useDeleteEmployee, useEditEmployee,
+  useServices, useAddService, useEditService, useDeleteService,
+  useClients, useEditClient, useDeleteClient,
+  useAddBloqueio, useDeleteBloqueio,
+  useScaleOverrides,
+  useTurnoSwapRequests, useAddTurnoSwapRequest, useUpdateTurnoSwapRequestStatus,
+  useSaveScaleOverride, useSwapScaleDays, useReplicateScaleDays,
+  type ScaleOverridePayload, type ScaleSwapPayload, type ScaleReplicatePayload,
+} from './api'; // Importando os novos hooks
+
+const SupervisorViewLazy = lazy(() => import('./components/SupervisorView').then((module) => ({ default: module.SupervisorView })));
+const CollaboratorViewLazy = lazy(() => import('./components/CollaboratorView').then((module) => ({ default: module.CollaboratorView })));
+const TVPanelViewLazy = lazy(() => import('./components/TVPanelView').then((module) => ({ default: module.TVPanelView })));
+const UpcomingAppointmentsModalLazy = lazy(() => import('./components/UpcomingAppointmentsModal').then((module) => ({ default: module.UpcomingAppointmentsModal })));
+
+const ModuleLoading = ({ label = 'Carregando módulo...' }: { label?: string }) => (
+  <div className="min-h-[240px] flex flex-col items-center justify-center gap-2 text-on-surface-variant">
+    <span className="material-symbols-outlined text-4xl animate-spin text-primary">progress_activity</span>
+    <p className="text-sm font-semibold uppercase tracking-wide">{label}</p>
+  </div>
+);
+
+type ServicePayload = {
+  nome: string;
+  preco: number | string;
+  duracao: number | string;
+  icone?: string;
+  descricao?: string;
+  modoElegibilidade?: ServiceEligibilityMode;
+  cargosPermitidos?: string[];
+  habilidadesPermitidas?: string[];
+};
+
+const normalizeEligibilityMode = (value: unknown): ServiceEligibilityMode => {
+  if (value === 'cargo' || value === 'habilidade' || value === 'livre') return value;
+  return 'livre';
+};
+
+const normalizeStringArray = (value: unknown): string[] => {
+  if (!Array.isArray(value)) return [];
+  return Array.from(new Set(value
+    .map((entry) => typeof entry === 'string' ? entry.trim() : '')
+    .filter(Boolean)));
+};
+
+const normalizeServicePayload = (service: ServicePayload): { data?: Omit<Service, 'id'>; error?: string } => {
+  const nome = service.nome?.trim();
+  const preco = Number(service.preco);
+  const duracao = Number(service.duracao);
+  const icone = typeof service.icone === 'string' ? service.icone.trim() : undefined;
+  const descricao = typeof service.descricao === 'string' ? service.descricao.trim() : undefined;
+  const modoElegibilidade = normalizeEligibilityMode(service.modoElegibilidade);
+  const cargosPermitidos = modoElegibilidade === 'cargo'
+    ? normalizeStringArray(service.cargosPermitidos)
+    : [];
+  const habilidadesPermitidas = modoElegibilidade === 'habilidade'
+    ? normalizeStringArray(service.habilidadesPermitidas)
+    : [];
+
+  if (!nome || nome.length < 3) {
+    return { error: 'O nome do serviço deve ter ao menos 3 caracteres.' };
+  }
+
+  if (nome.length > 80) {
+    return { error: 'O nome do serviço deve ter no máximo 80 caracteres.' };
+  }
+
+  if (!Number.isFinite(preco) || preco < 0) {
+    return { error: 'Informe um preço válido (maior ou igual a zero).' };
+  }
+
+  if (!Number.isInteger(duracao) || duracao < 5 || duracao > 480 || duracao % 5 !== 0) {
+    return { error: 'A duração deve ser um número inteiro entre 5 e 480 minutos (múltiplos de 5).' };
+  }
+
+  if (icone && icone.length > 64) {
+    return { error: 'O ícone informado é inválido.' };
+  }
+
+  if (descricao && descricao.length > 500) {
+    return { error: 'A descrição deve ter no máximo 500 caracteres.' };
+  }
+
+  if (modoElegibilidade === 'cargo' && cargosPermitidos.length === 0) {
+    return { error: 'Selecione ao menos um cargo para serviços com restrição por cargo.' };
+  }
+
+  if (modoElegibilidade === 'habilidade' && habilidadesPermitidas.length === 0) {
+    return { error: 'Selecione ao menos uma habilidade para serviços com restrição por habilidade.' };
+  }
+
+  return {
+    data: {
+      nome,
+      preco,
+      duracao,
+      icone: icone || 'spa',
+      descricao: descricao || '',
+      modoElegibilidade,
+      cargosPermitidos,
+      habilidadesPermitidas,
+    },
+  };
+};
+
+const ADMIN_USER: Employee = {
+  id: 'admin',
+  name: 'Diretoria',
+  email: 'admin@serenidade.com',
+  role: 'supervisor',
+  specialty: 'Gestão',
+  avatar: 'https://api.dicebear.com/7.x/notionists/svg?seed=Diretoria',
+  rating: 5.0,
+  completedServices: 0,
+  diasTrabalho: '1,2,3,4,5,6',
+  bloqueios: []
+};
+
+export default function App() {
+  const { currentUser, token, loginError, handleLogin, handleLogout } = useAuth();
+  const queryClient = useQueryClient();
+  const [isPublicTVMode, setIsPublicTVMode] = useState(false);
+
+  // 1. SUBSTITUIÇÃO DOS ESTADOS MANUAIS PELOS HOOKS DO REACT QUERY
+  // Os dados, loading e erros agora são gerenciados automaticamente.
+  const { data: employeesData, isLoading: loadingEmployees, isError: errorEmployees } = useEmployees(token);
+  const { data: appointmentsData, isLoading: loadingAppointments, isError: errorAppointments } = useAppointments(token);
+  const { data: services, isLoading: loadingServices, isError: errorServices } = useServices(token);
+  const { data: clients, isLoading: loadingClients, isError: errorClients } = useClients(token);
+  const { data: scaleOverridesData, isLoading: loadingScaleOverrides } = useScaleOverrides(token);
+  const { data: turnoSwapRequestsData, isLoading: loadingTurnoSwaps, isError: errorTurnoSwaps } = useTurnoSwapRequests(token);
+
+  // Adicionamos o usuário admin manualmente à lista vinda da API
+  const employees = useMemo(() => (employeesData ? [ADMIN_USER, ...employeesData] : [ADMIN_USER]), [employeesData]);
+  const appointments = useMemo(() => appointmentsData || [], [appointmentsData]);
+  const scaleOverrides = useMemo(() => scaleOverridesData || [], [scaleOverridesData]);
+  const turnoSwapRequests = useMemo(() => turnoSwapRequestsData || [], [turnoSwapRequestsData]);
+  const upcomingAppointmentsCount = useMemo(() => {
+    const today = getLocalTodayString();
+    const currentMinuteOfDay = getBrazilCurrentMinuteOfDay();
+    return appointments.filter((appointment) => {
+      if (appointment.status !== 'scheduled' || appointment.date !== today) return false;
+      const [hours, minutes] = appointment.time.split(':').map(Number);
+      if (Number.isNaN(hours) || Number.isNaN(minutes)) return false;
+      return hours * 60 + minutes >= currentMinuteOfDay;
+    }).length;
+  }, [appointments]);
+
+  const [activeRoleView, setActiveRoleView] = useState<'supervisor' | 'collaborator' | 'tv'>('collaborator');
+  const [showUpcomingAppointments, setShowUpcomingAppointments] = useState(false);
+
+  // Atualiza a View de segurança baseada no cargo toda vez que o currentUser mudar
+  useEffect(() => { if (currentUser) setActiveRoleView(currentUser.role); }, [currentUser]);
+
+  // Estado do Tema (Modo Escuro/Claro) com persistência no navegador
+  const [isDarkMode, setIsDarkMode] = useState<boolean>(() => {
+    const savedTheme = localStorage.getItem('spa_theme');
+    if (savedTheme) {
+      return savedTheme === 'dark';
+    }
+    return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+  });
+
+  // Efeito apenas para a carga inicial (quando o site abre)
+  useEffect(() => {
+    if (isDarkMode) {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+  }, []); // Executa apenas uma vez no carregamento
+
+  const toggleTheme = () => {
+    const newTheme = !isDarkMode;
+    
+    const updateDOM = () => {
+      // Atualiza o estado do React (muda o ícone de Sol/Lua)
+      flushSync(() => setIsDarkMode(newTheme));
+      
+      // Atualiza o HTML e o Cache IMEDIATAMENTE para a animação capturar certo
+      if (newTheme) {
+        document.documentElement.classList.add('dark');
+        localStorage.setItem('spa_theme', 'dark');
+      } else {
+        document.documentElement.classList.remove('dark');
+        localStorage.setItem('spa_theme', 'light');
+      }
+    };
+
+    if (!document.startViewTransition) {
+      updateDOM();
+    } else {
+      document.startViewTransition(() => {
+        updateDOM();
+      });
+    }
+  };
+
+  useEffect(() => {
+    const handleWindowError = (event: ErrorEvent) => {
+      console.error('[FRONTEND][UNCAUGHT_ERROR]', {
+        message: event.message,
+        file: event.filename,
+        line: event.lineno,
+        column: event.colno,
+        stack: event.error instanceof Error ? event.error.stack : undefined,
+      });
+    };
+
+    const handleUnhandledRejection = (event: PromiseRejectionEvent) => {
+      console.error('[FRONTEND][UNHANDLED_REJECTION]', {
+        reason: event.reason,
+      });
+    };
+
+    window.addEventListener('error', handleWindowError);
+    window.addEventListener('unhandledrejection', handleUnhandledRejection);
+
+    return () => {
+      window.removeEventListener('error', handleWindowError);
+      window.removeEventListener('unhandledrejection', handleUnhandledRejection);
+    };
+  }, []);
+
+  // ATIVA AS BUSCAS INICIAIS E O WEBSOCKET
+  useEffect(() => {
+    // Só conecta o socket e busca dados caso o usuário tenha um token (esteja logado)
+    if (!token) return;
+
+    const socket = io(getSocketUrl());
+    let invalidateTimer: ReturnType<typeof setTimeout> | null = null;
+    // Evita tempestade de refetch: invalida apenas chaves relevantes e de forma agrupada.
+    socket.on('db_updated', () => {
+      if (invalidateTimer) clearTimeout(invalidateTimer);
+      invalidateTimer = setTimeout(() => {
+        console.log('🔄 WebSocket: atualização recebida, sincronizando caches ativos.');
+        queryClient.invalidateQueries({ queryKey: ['appointments'], refetchType: 'active' });
+        queryClient.invalidateQueries({ queryKey: ['employees'], refetchType: 'active' });
+        queryClient.invalidateQueries({ queryKey: ['services'], refetchType: 'active' });
+        queryClient.invalidateQueries({ queryKey: ['clients'], refetchType: 'active' });
+        queryClient.invalidateQueries({ queryKey: ['scale-overrides'], refetchType: 'active' });
+        queryClient.invalidateQueries({ queryKey: ['turno-swaps'], refetchType: 'active' });
+      }, 250);
+    }); 
+    
+    return () => {
+      if (invalidateTimer) clearTimeout(invalidateTimer);
+      socket.disconnect();
+    };
+  }, [token, queryClient]);
+
+  // 2. SUBSTITUIÇÃO DAS FUNÇÕES DE CALLBACK PELAS MUTAÇÕES DO REACT QUERY
+  // A lógica de 'fetch', 'try/catch', e 'setEstado' é abstraída para dentro dos hooks.
+  // O componente apenas chama a função 'mutateAsync'. O 'onSuccess' nos hooks cuida da atualização da UI.
+  const { mutateAsync: addAppointment, isPending: isAddingAppointment } = useAddAppointment(token);
+  const { mutateAsync: completeAppointment } = useCompleteAppointment(token);
+  const { mutateAsync: reassignAppointment } = useReassignAppointment(token);
+  const { mutateAsync: editAppointment } = useEditAppointment(token);
+  const { mutateAsync: deleteAppointment } = useDeleteAppointment(token);
+  const { mutateAsync: addEmployee } = useAddEmployee(token);
+  const { mutateAsync: deleteEmployee } = useDeleteEmployee(token);
+  const { mutateAsync: editEmployee } = useEditEmployee(token);
+  const { mutateAsync: addService } = useAddService(token);
+  const { mutateAsync: editService } = useEditService(token);
+  const { mutateAsync: deleteService } = useDeleteService(token);
+  const { mutateAsync: editClient } = useEditClient(token);
+  const { mutateAsync: deleteClient } = useDeleteClient(token);
+  const { mutateAsync: addBloqueio } = useAddBloqueio(token);
+  const { mutateAsync: deleteBloqueio } = useDeleteBloqueio(token);
+  const { mutateAsync: addTurnoSwapRequest } = useAddTurnoSwapRequest(token);
+  const { mutateAsync: updateTurnoSwapRequestStatus } = useUpdateTurnoSwapRequestStatus(token);
+  const { mutateAsync: saveScaleOverride } = useSaveScaleOverride(token);
+  const { mutateAsync: swapScaleDays } = useSwapScaleDays(token);
+  const { mutateAsync: replicateScaleDays } = useReplicateScaleDays(token);
+
+  const handleReassign = (appointmentId: string, newEmployeeId: string) => {
+    return reassignAppointment({ id: appointmentId, newEmployeeId });
+  };
+
+  const handleDeleteEmployee = (id: string, reallocateToId?: string) => {
+    return deleteEmployee({ id, reallocateToId });
+  };
+
+  const handleEditEmployee = (id: string, employee: Partial<Employee>) => {
+    return editEmployee({ id, ...employee });
+  };
+
+  const handleAddService = async (service: ServicePayload): Promise<boolean | string> => {
+    const normalized = normalizeServicePayload(service);
+    if (!normalized.data) {
+      return normalized.error || 'Dados do serviço inválidos.';
+    }
+
+    try {
+      await addService(normalized.data);
+      return true;
+    } catch (error) {
+      return error instanceof Error ? error.message : 'Erro ao adicionar serviço.';
+    }
+  };
+
+  const handleEditService = async (id: string, service: ServicePayload): Promise<boolean | string> => {
+    const normalized = normalizeServicePayload(service);
+    if (!normalized.data) {
+      return normalized.error || 'Dados do serviço inválidos.';
+    }
+
+    try {
+      await editService({
+        id,
+        ...normalized.data,
+      });
+      return true;
+    } catch (error) {
+      return error instanceof Error ? error.message : 'Erro ao atualizar serviço.';
+    }
+  };
+
+  const handleEditAppointment = (id: string, appointment: Partial<Appointment>) => {
+    return editAppointment({ id, ...appointment });
+  };
+
+  const handleEditClient = (id: string, clientData: Partial<Client>) => {
+    return editClient({ id, ...clientData });
+  };
+
+  const handleAddTurnoSwapRequest = (payload: Omit<TurnoSwapRequest, 'id' | 'criadoEm' | 'atualizadoEm' | 'colaboradorNome'>) => {
+    return addTurnoSwapRequest(payload);
+  };
+
+  const handleUpdateTurnoSwapRequestStatus = (id: string, status: Exclude<TurnoSwapStatus, 'pendente'>, respostaObservacao?: string) => {
+    return updateTurnoSwapRequestStatus({ id, status, respostaObservacao });
+  };
+
+  const handleSaveScaleOverride = (payload: ScaleOverridePayload) => {
+    return saveScaleOverride(payload);
+  };
+
+  const handleSwapScaleDays = (payload: ScaleSwapPayload) => {
+    return swapScaleDays(payload);
+  };
+
+  const handleReplicateScaleDays = (payload: ScaleReplicatePayload) => {
+    return replicateScaleDays(payload);
+  };
+
+  const staff = useMemo(() => {
+    // Repassa todos (Colab e Super) para aparecerem, exceto o admin virtual
+    return employees.filter(e => e.id !== 'admin').map(emp => ({
+      ...emp,
+      completedServices: appointments.filter(
+        a => a.assignedEmployeeId === emp.id && a.status === 'completed'
+      ).length
+    }));
+  }, [employees, appointments]);
+
+  if (!currentUser && isPublicTVMode) {
+    return (
+      <Suspense fallback={<ModuleLoading label="Carregando painel TV..." />}>
+        <TVPanelViewLazy appointments={appointments} employees={staff} onExit={() => setIsPublicTVMode(false)} />
+      </Suspense>
+    );
+  }
+
+  if (!currentUser) {
+    return <LoginView onLogin={handleLogin} onOpenTVPanel={() => setIsPublicTVMode(true)} error={loginError} />;
+  }
+
+  // 3. ESTADOS GLOBAIS DE CARREGAMENTO E ERRO
+  // Combina os status para garantir que a interface só renderize com tudo pronto
+  const isGlobalLoading = loadingEmployees || loadingAppointments || loadingServices || loadingClients || loadingTurnoSwaps || loadingScaleOverrides;
+  const criticalErrors = [errorEmployees, errorAppointments, errorServices, errorClients];
+  const shouldBlockAppOnError = criticalErrors.every(Boolean);
+
+  if (isGlobalLoading) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-[var(--color-background)]">
+        <span className="material-symbols-outlined text-6xl text-[var(--color-primary)] animate-spin mb-4">
+          progress_activity
+        </span>
+        <p className="text-xl font-serif text-[var(--color-on-background)] animate-pulse">
+          Carregando dados do sistema...
+        </p>
+      </div>
+    );
+  }
+
+  if (shouldBlockAppOnError) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-[var(--color-background)] p-4">
+        <div className="bg-[var(--color-error-container)] p-8 rounded-3xl max-w-md text-center shadow-lg border border-[var(--color-error)]">
+          <span className="material-symbols-outlined text-5xl text-[var(--color-on-error-container)] mb-4">cloud_off</span>
+          <h2 className="text-2xl font-bold text-[var(--color-on-error-container)] mb-2">Falha na Conexão</h2>
+          <p className="text-[var(--color-on-error-container)] opacity-80 mb-6">Nao foi possivel carregar as informacoes essenciais. Verifique sua conexao com o servidor.</p>
+          <button onClick={() => window.location.reload()} className="bg-[var(--color-error)] text-[var(--color-on-error)] px-6 py-2 rounded-xl font-bold uppercase tracking-wider transition-colors hover:bg-[var(--color-error-dim)]">Tentar Novamente</button>
+        </div>
+      </div>
+    );
+  }
+
+  // Se o Modo TV estiver ativo, renderiza ele em tela cheia (sem Layout de fundo)
+  if (activeRoleView === 'tv') {
+    return (
+      <Suspense fallback={<ModuleLoading label="Carregando painel TV..." />}>
+        <TVPanelViewLazy appointments={appointments} employees={staff} onExit={() => setActiveRoleView(currentUser.role)} />
+      </Suspense>
+    );
+  }
+
+  return (
+    <Layout 
+      userName={currentUser.name} 
+      userRole={currentUser.role} 
+      activeView={activeRoleView} 
+      onViewChange={(view) => {
+        // Trava de segurança: impede mudança de estado se não for supervisor
+        if (currentUser.role === 'supervisor') setActiveRoleView(view);
+      }} 
+      onLogout={handleLogout}
+      isDarkMode={isDarkMode}
+      toggleTheme={toggleTheme}
+      onOpenUpcomingAppointments={currentUser.role === 'supervisor' && activeRoleView === 'supervisor' ? () => setShowUpcomingAppointments(true) : undefined}
+      upcomingAppointmentsCount={currentUser.role === 'supervisor' && activeRoleView === 'supervisor' ? upcomingAppointmentsCount : 0}
+    >
+      {/* Trava de segurança final: exige que a função (role) real do banco seja supervisor */}
+      <Suspense fallback={<ModuleLoading />}>
+        {currentUser.role === 'supervisor' && activeRoleView === 'supervisor' ? (
+          <SupervisorViewLazy 
+            employees={staff}
+            appointments={appointments}
+            services={services || []}
+            clients={clients || []}
+            onReassign={handleReassign}
+            onAddEmployee={addEmployee}
+            onDeleteEmployee={handleDeleteEmployee}
+            onEditEmployee={handleEditEmployee}
+            onAddService={handleAddService}
+            onEditService={handleEditService}
+            onDeleteService={deleteService}
+            onAddAppointment={addAppointment}
+            isAddingAppointment={isAddingAppointment}
+            onDeleteAppointment={deleteAppointment}
+            onEditAppointment={handleEditAppointment}
+            onCompleteAppointment={completeAppointment}
+            onEditClient={handleEditClient}
+            onDeleteClient={deleteClient}
+            onAddBloqueio={addBloqueio}
+            onDeleteBloqueio={deleteBloqueio}
+            scaleOverrides={scaleOverrides}
+            turnoSwapRequests={turnoSwapRequests}
+            onUpdateTurnoSwapRequestStatus={handleUpdateTurnoSwapRequestStatus}
+            onOpenUpcomingAppointments={() => setShowUpcomingAppointments(true)}
+            onSaveScaleOverride={handleSaveScaleOverride}
+            onSwapScaleDays={handleSwapScaleDays}
+            onReplicateScaleDays={handleReplicateScaleDays}
+          />
+        ) : (
+          <CollaboratorViewLazy 
+            currentUser={currentUser}
+            employees={staff}
+            appointments={appointments}
+            services={services || []}
+            clients={clients || []}
+            onAddAppointment={addAppointment}
+            isAddingAppointment={isAddingAppointment}
+            onEditAppointment={handleEditAppointment}
+            onDeleteAppointment={deleteAppointment}
+            onEditClient={handleEditClient}
+            onDeleteClient={deleteClient}
+            onCompleteAppointment={completeAppointment}
+            onAddBloqueio={addBloqueio}
+            onDeleteBloqueio={deleteBloqueio}
+            onSubmitTurnoSwapRequest={handleAddTurnoSwapRequest}
+          />
+        )}
+      </Suspense>
+
+      {showUpcomingAppointments && (
+        <Suspense fallback={null}>
+          <UpcomingAppointmentsModalLazy
+            open={showUpcomingAppointments}
+            appointments={appointments}
+            employees={staff}
+            services={services || []}
+            onClose={() => setShowUpcomingAppointments(false)}
+          />
+        </Suspense>
+      )}
+    </Layout>
+  );
+}
