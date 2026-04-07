@@ -91,7 +91,7 @@ export function SupervisorPlanejamentoTab(props: SupervisorPlanejamentoTabProps)
               {/* Linha 1: filtro, navegação temporal, modo de visualização */}
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-center">
                 <div className="flex flex-wrap items-end gap-3">
-                  <div className="min-w-[170px]">
+                  <div className="min-w-42.5">
                     <label className="block text-[10px] font-bold uppercase tracking-[0.15em] text-on-surface-variant mb-2">Setor</label>
                     <select
                       value={filterRole}
@@ -197,7 +197,7 @@ export function SupervisorPlanejamentoTab(props: SupervisorPlanejamentoTabProps)
                   <select
                     value={filterStatus}
                     onChange={(event) => setFilterStatus(event.target.value as 'all' | 'folgaHoje')}
-                    className="h-11 min-w-[170px] bg-surface-container-low border border-outline-variant/20 rounded-xl px-3 text-sm text-on-surface"
+                    className="h-11 min-w-42.5 bg-surface-container-low border border-outline-variant/20 rounded-xl px-3 text-sm text-on-surface"
                     title="Filtrar status da equipe"
                   >
                     <option value="all">Status: Todos</option>

@@ -1331,7 +1331,7 @@ export function SupervisorView({ employees, appointments, services, clients, sca
                 </select>
               </div>
               
-              <div className="overflow-y-auto flex-grow border border-outline-variant/10 rounded-2xl">
+              <div className="overflow-y-auto grow border border-outline-variant/10 rounded-2xl">
                 <table className="w-full text-left border-collapse">
                   <thead className="bg-surface-container-low sticky top-0 shadow-sm z-10">
                     <tr>
@@ -1360,7 +1360,7 @@ export function SupervisorView({ employees, appointments, services, clients, sca
                               </div>
                             )}
                           </td>
-                          <td className="py-3 px-4 text-xs text-on-surface-variant max-w-[150px] truncate" title={app.services.join(', ')}>{app.services.join(', ')}</td>
+                          <td className="py-3 px-4 text-xs text-on-surface-variant max-w-37.5 truncate" title={app.services.join(', ')}>{app.services.join(', ')}</td>
                           <td className="py-3 px-4 text-xs">
                             <span className={`px-2 py-1 rounded-full font-bold uppercase tracking-wider text-[9px] ${app.status === 'completed' ? 'bg-primary/10 text-primary' : 'bg-secondary-container text-on-secondary-container'}`}>
                               {app.status === 'completed' ? 'Concluído' : 'Agendado'}
@@ -1429,7 +1429,7 @@ export function SupervisorView({ employees, appointments, services, clients, sca
 
         {/* Modal de Erro Elegante */}
         {errorMessage && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100] p-4">
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-100 p-4">
             <motion.div 
               initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }}
               className="bg-surface-container-lowest/90 backdrop-blur-2xl p-8 rounded-3xl shadow-2xl max-w-sm w-full border border-error/30 text-center"
@@ -1453,7 +1453,7 @@ export function SupervisorView({ employees, appointments, services, clients, sca
         {toastMessage && (
           <motion.div 
             initial={{ opacity: 0, y: 50, scale: 0.9 }} animate={{ opacity: 1, y: 0, scale: 1 }}
-            className="fixed bottom-8 right-8 bg-surface-container-highest text-on-surface border border-outline-variant/30 px-6 py-4 rounded-2xl shadow-xl flex items-center gap-3 z-[100]"
+            className="fixed bottom-8 right-8 bg-surface-container-highest text-on-surface border border-outline-variant/30 px-6 py-4 rounded-2xl shadow-xl flex items-center gap-3 z-100"
           >
             <span className="material-symbols-outlined text-primary">check_circle</span>
             <p className="text-sm font-bold">{toastMessage}</p>

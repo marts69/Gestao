@@ -158,7 +158,7 @@ export function Layout({ children, userName, userRole, activeView, onViewChange,
         )}
       </AnimatePresence>
 
-      <main className="flex-grow flex flex-col items-center px-4 py-12 md:py-16">
+      <main className="grow flex flex-col items-center px-4 py-12 md:py-16">
         {children}
       </main>
 

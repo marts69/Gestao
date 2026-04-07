@@ -124,6 +124,18 @@ export function createRouter(io: Server) {
     return found ? { tipo: found.tipo, descricao: found.descricao } : null;
   };
 
+  const getScaleUnavailabilityMessage = (override: { tipo?: string | null; descricao?: string | null } | null) => {
+    if (!override?.tipo || override.tipo === 'trabalho') return null;
+
+    const statusLabel = override.tipo === 'fds'
+      ? 'FDS'
+      : /f[eé]rias/i.test(override.descricao || '')
+        ? 'Férias'
+        : 'Folga';
+
+    return `Profissional indisponível na escala: ${statusLabel}${override.descricao ? ` (${override.descricao})` : ''}.`;
+  };
+
   const httpError = (status: number, erro: string) => Object.assign(new Error(erro), { httpStatus: status, httpMessage: erro });
 
   const isSerializationConflict = (error: any) => error?.code === 'P2034';
@@ -519,13 +531,9 @@ export function createRouter(io: Server) {
 
       const dayStr = format(parsedDate, 'yyyy-MM-dd');
       const dayOverride = await getScaleOverrideForDate(collaboratorId, dayStr);
-      if (dayOverride?.tipo && dayOverride.tipo !== 'trabalho') {
-        const statusLabel = dayOverride.tipo === 'fds'
-          ? 'FDS'
-          : /f[eé]rias/i.test(dayOverride.descricao || '')
-            ? 'Férias'
-            : 'Folga';
-        return res.status(409).json({ erro: `Profissional indisponível na escala: ${statusLabel}${dayOverride.descricao ? ` (${dayOverride.descricao})` : ''}.` });
+      const dayUnavailableMessage = getScaleUnavailabilityMessage(dayOverride);
+      if (dayUnavailableMessage) {
+        return res.status(409).json({ erro: dayUnavailableMessage });
       }
 
       const lockKey = buildAppointmentLockKey(collaboratorId, parsedDate);
@@ -647,13 +655,9 @@ export function createRouter(io: Server) {
       const finalColaboradorId = requestedColaboradorId || agendamentoAntigo.colaboradorId;
       const finalDay = format(finalDate, 'yyyy-MM-dd');
       const dayOverride = await getScaleOverrideForDate(finalColaboradorId, finalDay);
-      if (dayOverride?.tipo && dayOverride.tipo !== 'trabalho') {
-        const statusLabel = dayOverride.tipo === 'fds'
-          ? 'FDS'
-          : /f[eé]rias/i.test(dayOverride.descricao || '')
-            ? 'Férias'
-            : 'Folga';
-        return res.status(409).json({ erro: `Profissional indisponível na escala: ${statusLabel}${dayOverride.descricao ? ` (${dayOverride.descricao})` : ''}.` });
+      const dayUnavailableMessage = getScaleUnavailabilityMessage(dayOverride);
+      if (dayUnavailableMessage) {
+        return res.status(409).json({ erro: dayUnavailableMessage });
       }
 
       const lockKey = buildAppointmentLockKey(finalColaboradorId, finalDate);
@@ -778,15 +782,48 @@ export function createRouter(io: Server) {
         return res.status(404).json({ erro: 'Agendamento não encontrado.' });
       }
 
-      const eligibilityError = await getEligibilityErrorForCollaborator(prisma, colaboradorId, agendamento.servicos);
-      if (eligibilityError) {
-        return res.status(409).json({ erro: eligibilityError });
+      const targetDay = format(agendamento.data, 'yyyy-MM-dd');
+      const dayOverride = await getScaleOverrideForDate(colaboradorId, targetDay);
+      const dayUnavailableMessage = getScaleUnavailabilityMessage(dayOverride);
+      if (dayUnavailableMessage) {
+        return res.status(409).json({ erro: dayUnavailableMessage });
       }
 
-      const agendamentoAtualizado = await prisma.agendamento.update({ where: { id: id }, data: { colaboradorId } });
+      const lockKey = buildAppointmentLockKey(colaboradorId, agendamento.data);
+      const agendamentoAtualizado = await withAppointmentMutex(lockKey, async () => runSerializableTransaction(async (tx) => {
+        await acquireAppointmentAdvisoryLock(tx, lockKey);
+
+        const agendamentoAtualTx = await tx.agendamento.findUnique({
+          where: { id },
+          include: { servicos: true },
+        });
+        if (!agendamentoAtualTx) throw httpError(404, 'Agendamento não encontrado.');
+
+        const txDay = format(agendamentoAtualTx.data, 'yyyy-MM-dd');
+        const txDayOverride = await getScaleOverrideForDate(colaboradorId, txDay);
+        const txDayUnavailableMessage = getScaleUnavailabilityMessage(txDayOverride);
+        if (txDayUnavailableMessage) throw httpError(409, txDayUnavailableMessage);
+
+        const eligibilityError = await getEligibilityErrorForCollaborator(tx, colaboradorId, agendamentoAtualTx.servicos);
+        if (eligibilityError) throw httpError(409, eligibilityError);
+
+        const duracao = agendamentoAtualTx.servicos.reduce((acc: number, servico: any) => acc + (servico.duracao || 60), 0) || 60;
+        const conflito = await verificarConflito(tx, colaboradorId, agendamentoAtualTx.data, duracao, id);
+        if (conflito) throw httpError(409, 'Conflito de agenda. O horário coincide com outro compromisso.');
+
+        return tx.agendamento.update({
+          where: { id },
+          data: { colaboradorId },
+          include: { cliente: true, colaborador: true, servicos: true },
+        });
+      }));
+
       notifyClients();
       res.json(agendamentoAtualizado);
     } catch (error) {
+      if ((error as any)?.httpStatus) {
+        return res.status((error as any).httpStatus).json({ erro: (error as any).httpMessage || 'Erro na requisição.' });
+      }
       res.status(500).json({ erro: 'Erro ao realocar agendamento' });
     }
   });
@@ -808,15 +845,48 @@ export function createRouter(io: Server) {
         return res.status(404).json({ erro: 'Agendamento não encontrado.' });
       }
 
-      const eligibilityError = await getEligibilityErrorForCollaborator(prisma, newEmployeeId, agendamento.servicos);
-      if (eligibilityError) {
-        return res.status(409).json({ erro: eligibilityError });
+      const targetDay = format(agendamento.data, 'yyyy-MM-dd');
+      const dayOverride = await getScaleOverrideForDate(newEmployeeId, targetDay);
+      const dayUnavailableMessage = getScaleUnavailabilityMessage(dayOverride);
+      if (dayUnavailableMessage) {
+        return res.status(409).json({ erro: dayUnavailableMessage });
       }
 
-      const agendamentoAtualizado = await prisma.agendamento.update({ where: { id }, data: { colaboradorId: newEmployeeId } });
+      const lockKey = buildAppointmentLockKey(newEmployeeId, agendamento.data);
+      const agendamentoAtualizado = await withAppointmentMutex(lockKey, async () => runSerializableTransaction(async (tx) => {
+        await acquireAppointmentAdvisoryLock(tx, lockKey);
+
+        const agendamentoAtualTx = await tx.agendamento.findUnique({
+          where: { id },
+          include: { servicos: true },
+        });
+        if (!agendamentoAtualTx) throw httpError(404, 'Agendamento não encontrado.');
+
+        const txDay = format(agendamentoAtualTx.data, 'yyyy-MM-dd');
+        const txDayOverride = await getScaleOverrideForDate(newEmployeeId, txDay);
+        const txDayUnavailableMessage = getScaleUnavailabilityMessage(txDayOverride);
+        if (txDayUnavailableMessage) throw httpError(409, txDayUnavailableMessage);
+
+        const eligibilityError = await getEligibilityErrorForCollaborator(tx, newEmployeeId, agendamentoAtualTx.servicos);
+        if (eligibilityError) throw httpError(409, eligibilityError);
+
+        const duracao = agendamentoAtualTx.servicos.reduce((acc: number, servico: any) => acc + (servico.duracao || 60), 0) || 60;
+        const conflito = await verificarConflito(tx, newEmployeeId, agendamentoAtualTx.data, duracao, id);
+        if (conflito) throw httpError(409, 'Conflito de agenda. O horário coincide com outro compromisso.');
+
+        return tx.agendamento.update({
+          where: { id },
+          data: { colaboradorId: newEmployeeId },
+          include: { cliente: true, colaborador: true, servicos: true },
+        });
+      }));
+
       notifyClients();
       res.json(agendamentoAtualizado);
     } catch (error) {
+      if ((error as any)?.httpStatus) {
+        return res.status((error as any).httpStatus).json({ erro: (error as any).httpMessage || 'Erro na requisição.' });
+      }
       res.status(500).json({ erro: 'Erro ao realocar agendamento' });
     }
   });
