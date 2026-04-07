@@ -3,6 +3,13 @@
 
 Aplicacao full-stack para gestao de agendamentos, bloqueios, equipe, clientes e servicos.
 
+## Guias detalhados
+
+Para detalhes tecnicos completos de cada camada:
+
+- Frontend: [frontend/README.md](frontend/README.md)
+- Backend: [backend/README.md](backend/README.md)
+
 ## Estrutura atual
 
 O projeto esta separado em frontend e backend dedicados.
