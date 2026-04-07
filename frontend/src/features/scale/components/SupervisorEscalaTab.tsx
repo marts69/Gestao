@@ -46,6 +46,7 @@ export function SupervisorEscalaTab({ employees, appointments, services, clients
   const [receptionDate, setReceptionDate] = useState(getLocalTodayString());
   const [scheduleSearchTerm, setScheduleSearchTerm] = useState('');
   const [professionalFilter, setProfessionalFilter] = useState('all');
+  const OFF_DAY_FILTER = '__off_today__';
   const [resourceFilter, setResourceFilter] = useState<'all' | 'sala_massagem' | 'ofuro' | 'estetica'>('all');
   const {
     state: {
@@ -230,7 +231,14 @@ export function SupervisorEscalaTab({ employees, appointments, services, clients
   const currentViewDateObj = new Date(`${receptionDate}T12:00:00Z`);
   const activeEmployees = employees
     .filter((emp) => emp.id !== 'admin')
-    .filter((emp) => professionalFilter === 'all' || emp.id === professionalFilter);
+    .filter((emp) => {
+      if (professionalFilter === 'all') return true;
+      if (professionalFilter === OFF_DAY_FILTER) {
+        const status = getEmployeeDayStatus(emp);
+        return Boolean(status?.isAllDayUnavailable && status.label !== 'Bloqueio');
+      }
+      return emp.id === professionalFilter;
+    });
 
   const employeeUnavailableReasons = useMemo(() => {
     const reasons: Record<string, string> = {};
@@ -338,6 +346,7 @@ export function SupervisorEscalaTab({ employees, appointments, services, clients
             className="md:w-56 bg-surface-container-low border border-outline-variant/30 text-sm rounded-xl px-3 py-2 focus:ring-1 focus:ring-primary text-on-surface"
           >
             <option value="all">Profissional: Todos</option>
+            <option value={OFF_DAY_FILTER}>Profissional: Somente de folga</option>
             {employees.filter((employee) => employee.id !== 'admin').map((employee) => (
               <option key={employee.id} value={employee.id}>{employee.name}</option>
             ))}
@@ -364,7 +373,7 @@ export function SupervisorEscalaTab({ employees, appointments, services, clients
             <div className="w-14 shrink-0 border-r border-outline-variant/10"></div>
             <div className="flex flex-1 overflow-x-hidden" ref={headerScrollRef}>
               {activeEmployees.map(emp => (
-                <div key={emp.id} className="flex-1 min-w-[220px] p-2 text-center border-r border-outline-variant/10">
+                <div key={emp.id} className="flex-1 min-w-55 p-2 text-center border-r border-outline-variant/10">
                   <img src={emp.avatar} alt={emp.name} className="w-9 h-9 mx-auto rounded-full border-2 border-surface-container shadow-sm object-cover" />
                   <h4 className="font-bold text-on-surface text-xs mt-1 truncate">{emp.name.split(' ')[0]}</h4>
                   <p className="text-[9px] text-on-surface-variant uppercase tracking-widest truncate">{emp.specialty}</p>
