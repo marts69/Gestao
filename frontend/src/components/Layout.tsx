@@ -65,7 +65,7 @@ export function Layout({ children, userName, userRole, activeView, onViewChange,
                 onChange={(e) => onViewChange?.(e.target.value as Role | 'tv')}
                 className="bg-transparent border-none text-xs font-semibold text-on-surface-variant uppercase tracking-tighter font-body focus:ring-0 cursor-pointer outline-none m-0 p-0"
               >
-                <option value="supervisor">Portal da Supervisão</option>
+                <option value="supervisor">Portal do Supervisor</option>
                 <option value="collaborator">Portal do Colaborador</option>
                 <option value="tv">Painel de TV (Recepção)</option>
               </select>

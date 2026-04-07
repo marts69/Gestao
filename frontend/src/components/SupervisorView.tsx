@@ -3,6 +3,7 @@ import { motion } from 'motion/react';
 import { Appointment, Bloqueio, Client, Employee, Service, TurnoSwapRequest, TurnoSwapStatus, ServiceEligibilityMode } from '../types';
 import { getLocalTodayString } from '../features/appointments/utils/appointmentCore';
 import { SupervisorDashboardTab } from '../features/dashboard/components';
+import { SupervisorClientesTab } from '../features/clients/components';
 import { SupervisorEquipeTab } from '../features/team/components';
 import { SupervisorEscalaTab } from '../features/scale/components';
 import { SupervisorPlanejamentoTab } from '../features/planning/components';
@@ -117,11 +118,11 @@ interface SupervisorViewProps {
   onReplicateScaleDays?: (payload: ScaleReplicatePayload) => Promise<boolean | void> | void;
 }
 
-export function SupervisorView({ employees, appointments, services, clients, scaleOverrides = [], onReassign, onAddEmployee, onDeleteEmployee, onEditEmployee, onAddService, onEditService, onDeleteService, onAddAppointment, isAddingAppointment, onDeleteAppointment, onEditAppointment, onCompleteAppointment, onEditClient, onAddBloqueio, onDeleteBloqueio, turnoSwapRequests = [], onUpdateTurnoSwapRequestStatus, onOpenUpcomingAppointments, onSaveScaleOverride, onSwapScaleDays, onReplicateScaleDays }: SupervisorViewProps) {
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'escala' | 'planejamento' | 'equipe' | 'servicos'>(() => {
+export function SupervisorView({ employees, appointments, services, clients, scaleOverrides = [], onReassign, onAddEmployee, onDeleteEmployee, onEditEmployee, onAddService, onEditService, onDeleteService, onAddAppointment, isAddingAppointment, onDeleteAppointment, onEditAppointment, onCompleteAppointment, onEditClient, onDeleteClient, onAddBloqueio, onDeleteBloqueio, turnoSwapRequests = [], onUpdateTurnoSwapRequestStatus, onOpenUpcomingAppointments, onSaveScaleOverride, onSwapScaleDays, onReplicateScaleDays }: SupervisorViewProps) {
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'escala' | 'planejamento' | 'equipe' | 'servicos' | 'clientes'>(() => {
     if (typeof window === 'undefined') return 'dashboard';
     const saved = window.sessionStorage.getItem('supervisor-active-tab');
-    if (saved === 'dashboard' || saved === 'escala' || saved === 'planejamento' || saved === 'equipe' || saved === 'servicos') {
+    if (saved === 'dashboard' || saved === 'escala' || saved === 'planejamento' || saved === 'equipe' || saved === 'servicos' || saved === 'clientes') {
       return saved;
     }
     return 'dashboard';
@@ -955,7 +956,7 @@ export function SupervisorView({ employees, appointments, services, clients, sca
       <div className="mb-6 space-y-4">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
           <div>
-            <h1 className="text-2xl md:text-3xl font-headline text-primary">Portal da Supervisão</h1>
+            <h1 className="text-2xl md:text-3xl font-headline text-primary">Portal do Supervisor</h1>
             <p className="text-sm text-on-surface-variant font-body">{activeTab === 'escala' ? 'Agenda operacional da recepção em tempo real.' : 'Gestão operacional do Spa com foco em produtividade e qualidade.'}</p>
           </div>
         </div>
@@ -984,6 +985,12 @@ export function SupervisorView({ employees, appointments, services, clients, sca
             className={`px-6 py-2 rounded-full text-xs font-bold tracking-wide uppercase whitespace-nowrap transition-all ${activeTab === 'servicos' ? 'bg-primary text-on-primary shadow-md' : 'text-on-surface-variant hover:text-primary'}`}
           >
             Serviços
+          </button>
+          <button
+            onClick={() => setActiveTab('clientes')}
+            className={`px-6 py-2 rounded-full text-xs font-bold tracking-wide uppercase whitespace-nowrap transition-all ${activeTab === 'clientes' ? 'bg-primary text-on-primary shadow-md' : 'text-on-surface-variant hover:text-primary'}`}
+          >
+            Clientes
           </button>
           <button 
             onClick={() => setActiveTab('equipe')}
@@ -1153,6 +1160,17 @@ export function SupervisorView({ employees, appointments, services, clients, sca
           appendRuleToken={appendRuleToken}
           newServiceDescription={newServiceDescription}
           setNewServiceDescription={setNewServiceDescription}
+        />
+      )}
+
+      {activeTab === 'clientes' && (
+        <SupervisorClientesTab
+          clients={clients}
+          appointments={appointments}
+          services={services}
+          onEditClient={onEditClient}
+          onDeleteClient={onDeleteClient}
+          setToastMessage={setToastMessage}
         />
       )}
 

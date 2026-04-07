@@ -1,5 +1,21 @@
 # 📦 SISTEMA DE ESCALAS CLT - RESUMO CONSOLIDADO
 
+## 🔎 Revisão de Pendências (07/04/2026)
+
+Itens reportados e incorporados nesta revisão:
+
+- [ ] Agendamento: mostrar somente quem está de folga (definir regra final de exibição na agenda).
+- [ ] Bloqueio automático/manual para pessoa que está de folga na data.
+- [ ] Supervisor alterar horários de trabalho e manter na listagem operacional.
+- [ ] Corrigir erro ao trocar folga que reinicia o site.
+- [x] Corrigido: sessão ao recarregar página não deve mais voltar para login.
+- [x] Entregue: função de Clientes disponível dentro do Portal do Supervisor.
+- [x] Ajustado texto de interface: "Portal da Supervisão" para "Portal do Supervisor".
+
+Observação:
+Os três itens marcados como concluídos acima já foram aplicados no frontend.
+Os demais itens permanecem no backlog funcional para implementação da próxima etapa.
+
 ## 🎯 O Que Foi Entregue
 
 ### ✅ 3 Bibliotecas de Utilidades (557 linhas de código)

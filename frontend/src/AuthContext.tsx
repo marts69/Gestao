@@ -2,6 +2,78 @@ import React, { createContext, useContext, useState, useCallback, ReactNode } fr
 import { Employee } from './types';
 import { getApiUrl } from './config/api';
 
+const TOKEN_STORAGE_KEY = 'spa_token';
+const USER_STORAGE_KEY = 'spa_user';
+
+const parseStoredUser = (): Employee | null => {
+  try {
+    const raw = localStorage.getItem(USER_STORAGE_KEY);
+    if (!raw) return null;
+
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object') return null;
+
+    const role = parsed.role === 'supervisor' ? 'supervisor' : parsed.role === 'collaborator' ? 'collaborator' : null;
+    if (!role || !parsed.id) return null;
+
+    return {
+      id: String(parsed.id),
+      name: typeof parsed.name === 'string' ? parsed.name : 'Usuário',
+      email: typeof parsed.email === 'string' ? parsed.email : '',
+      role,
+      specialty: typeof parsed.specialty === 'string' ? parsed.specialty : '',
+      avatar: typeof parsed.avatar === 'string'
+        ? parsed.avatar
+        : `https://api.dicebear.com/7.x/notionists/svg?seed=${encodeURIComponent(typeof parsed.name === 'string' ? parsed.name : 'usuario')}`,
+      rating: typeof parsed.rating === 'number' ? parsed.rating : 5,
+      completedServices: typeof parsed.completedServices === 'number' ? parsed.completedServices : 0,
+      diasTrabalho: typeof parsed.diasTrabalho === 'string' ? parsed.diasTrabalho : '1,2,3,4,5,6',
+      bloqueios: Array.isArray(parsed.bloqueios) ? parsed.bloqueios : [],
+      cargo: typeof parsed.cargo === 'string' ? parsed.cargo : undefined,
+      tipoEscala: typeof parsed.tipoEscala === 'string' ? parsed.tipoEscala : undefined,
+      folgasDomingoNoMes: typeof parsed.folgasDomingoNoMes === 'number' ? parsed.folgasDomingoNoMes : undefined,
+      cargaHorariaSemanal: typeof parsed.cargaHorariaSemanal === 'number' ? parsed.cargaHorariaSemanal : undefined,
+      habilidades: Array.isArray(parsed.habilidades) ? parsed.habilidades : undefined,
+    };
+  } catch {
+    return null;
+  }
+};
+
+const decodeUserFromToken = (token: string | null): Employee | null => {
+  if (!token) return null;
+
+  try {
+    const parts = token.split('.');
+    if (parts.length < 2) return null;
+
+    const payloadBase64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+    const padded = payloadBase64 + '='.repeat((4 - (payloadBase64.length % 4)) % 4);
+    const payload = JSON.parse(atob(padded));
+
+    const id = payload?.id ? String(payload.id) : '';
+    if (!id) return null;
+
+    const role = payload?.papel === 'supervisor' ? 'supervisor' : 'collaborator';
+    const name = role === 'supervisor' ? 'Supervisor' : 'Colaborador';
+
+    return {
+      id,
+      name,
+      email: '',
+      role,
+      specialty: '',
+      avatar: `https://api.dicebear.com/7.x/notionists/svg?seed=${encodeURIComponent(name)}`,
+      rating: 5,
+      completedServices: 0,
+      diasTrabalho: '1,2,3,4,5,6',
+      bloqueios: [],
+    };
+  } catch {
+    return null;
+  }
+};
+
 interface AuthContextType {
   currentUser: Employee | null;
   token: string | null;
@@ -13,8 +85,12 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [currentUser, setCurrentUser] = useState<Employee | null>(null);
-  const [token, setToken] = useState<string | null>(localStorage.getItem('spa_token'));
+  const [currentUser, setCurrentUser] = useState<Employee | null>(() => {
+    const storedUser = parseStoredUser();
+    if (storedUser) return storedUser;
+    return decodeUserFromToken(localStorage.getItem(TOKEN_STORAGE_KEY));
+  });
+  const [token, setToken] = useState<string | null>(() => localStorage.getItem(TOKEN_STORAGE_KEY));
   const [loginError, setLoginError] = useState<string | null>(null);
 
   const handleLogin = useCallback(async (email: string, pass: string) => {
@@ -30,7 +106,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const data = await response.json();
       
       setToken(data.token);
-      localStorage.setItem('spa_token', data.token); // Mantém logado ao dar F5
+      localStorage.setItem(TOKEN_STORAGE_KEY, data.token); // Mantém logado ao dar F5
       
       const loggedUser: Employee = {
         id: String(data.usuario.id),
@@ -46,6 +122,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       };
       
       setCurrentUser(loggedUser);
+      localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(loggedUser));
       setLoginError(null);
     } catch (err) {
       console.error("Falha na requisição de login:", err);
@@ -56,7 +133,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const handleLogout = useCallback(() => {
     setCurrentUser(null);
     setToken(null);
-    localStorage.removeItem('spa_token');
+    localStorage.removeItem(TOKEN_STORAGE_KEY);
+    localStorage.removeItem(USER_STORAGE_KEY);
   }, []);
 
   return (
