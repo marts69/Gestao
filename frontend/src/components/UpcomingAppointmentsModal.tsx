@@ -88,7 +88,7 @@ export function UpcomingAppointmentsModal({ open, appointments, employees, servi
 
   return (
     <div
-      className="fixed inset-0 z-[80] bg-black/55 backdrop-blur-sm flex items-center justify-center p-4"
+      className="fixed inset-0 z-80 bg-black/55 backdrop-blur-sm flex items-center justify-center p-4"
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) {
           onClose();
