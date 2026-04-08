@@ -92,6 +92,44 @@ export function SupervisorEscalaTab({ employees, appointments, services, clients
   const handleNextMonth = () => setCurrentMonthDate(new Date(year, month + 1, 1));
   const formatDayString = (d: number) => `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
 
+  const getDayCoverage = useCallback((dateStr: string) => {
+    const team = employees.filter((emp) => emp.id !== 'admin');
+    const ideal = Math.max(1, Math.ceil(team.length * 0.7));
+    const trabalhando: string[] = [];
+    const folgas: string[] = [];
+
+    for (const emp of team) {
+      const override = scaleOverrides.find((item) => item.colaboradorId === emp.id && item.data === dateStr);
+      if (override && override.tipo !== 'trabalho') {
+        folgas.push(emp.name.split(' ')[0] || emp.name);
+        continue;
+      }
+
+      const fullDayBlock = (emp.bloqueios || []).find((bloq) => {
+        if (bloq.data !== dateStr) return false;
+        const [startH = 0, startM = 0] = bloq.horaInicio.split(':').map(Number);
+        const [endH = 0, endM = 0] = bloq.horaFim.split(':').map(Number);
+        const startMinutes = startH * 60 + startM;
+        const endMinutes = endH * 60 + endM;
+        return startMinutes <= START_HOUR * 60 && endMinutes >= END_HOUR * 60;
+      });
+
+      if (fullDayBlock) {
+        folgas.push(emp.name.split(' ')[0] || emp.name);
+        continue;
+      }
+
+      trabalhando.push(emp.name.split(' ')[0] || emp.name);
+    }
+
+    return {
+      availableCount: trabalhando.length,
+      ideal,
+      trabalhando,
+      folgas,
+    };
+  }, [employees, scaleOverrides]);
+
   const dayScaleOverrideByEmployee = useMemo(() => {
     const map = new Map<string, { tipo: 'trabalho' | 'folga' | 'fds'; descricao?: string }>();
 
@@ -301,11 +339,49 @@ export function SupervisorEscalaTab({ employees, appointments, services, clients
              const dStr = formatDayString(d);
              const isSelected = receptionDate === dStr;
              const isToday = dStr === todayStr;
+             const coverage = getDayCoverage(dStr);
+             
+             let heatClass = 'bg-surface-container-lowest text-on-surface hover:bg-surface-container';
+             if (coverage.availableCount < coverage.ideal) {
+               heatClass = 'bg-orange-100 text-orange-800 border border-orange-300 hover:bg-orange-200';
+             } else if (coverage.availableCount >= coverage.ideal) {
+               heatClass = 'bg-emerald-100 text-emerald-800 border border-emerald-300 hover:bg-emerald-200';
+             }
+             
+             if (isSelected) {
+               heatClass = 'bg-primary text-on-primary shadow-md ring-2 ring-primary/30 ring-offset-2 ring-offset-surface-container-lowest font-bold';
+             } else if (isToday) {
+               heatClass = 'border-2 border-primary text-primary hover:bg-primary/10 font-bold';
+             }
+
              return (
-               <button 
-                 key={`day-${d}`} onClick={() => setReceptionDate(dStr)}
-                 className={`h-8 w-8 mx-auto rounded-full text-xs font-medium flex items-center justify-center transition-all ${isSelected ? 'bg-primary text-on-primary shadow-md' : isToday ? 'border border-primary text-primary' : 'text-on-surface hover:bg-surface-container'}`}
-               >{d}</button>
+               <div key={`day-${d}`} className="relative group flex items-center justify-center">
+                 <button 
+                   onClick={() => setReceptionDate(dStr)}
+                   className={`h-8 w-8 rounded-full text-xs transition-all flex items-center justify-center ${heatClass}`}
+                 >
+                   {d}
+                 </button>
+                 
+                 {/* Tooltip Hover nativo CSS */}
+                 <div className="absolute z-50 bottom-full mb-2 hidden group-hover:flex flex-col w-64 p-3 bg-surface-container-highest shadow-2xl rounded-2xl text-sm border border-outline-variant pointer-events-none left-1/2 -translate-x-1/2">
+                    <div className="font-bold text-primary mb-2 flex justify-between items-center border-b border-outline-variant/30 pb-1">
+                      <span>Cobertura: {dStr.split('-').reverse().join('/')}</span>
+                      <span className={`px-2 py-0.5 rounded-full text-[10px] ${coverage.availableCount < coverage.ideal ? 'bg-orange-500/20 text-orange-600' : 'bg-emerald-500/20 text-emerald-600'}`}>
+                        {coverage.availableCount} {coverage.availableCount === 1 ? 'Plantão' : 'Plantões'}
+                      </span>
+                    </div>
+                    <div className="text-xs text-on-surface mb-2 text-left">
+                      <span className="font-bold text-emerald-600 mb-0.5 flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> Trabalhando:</span>
+                      <span className="opacity-80 block pl-2.5 leading-tight">{coverage.trabalhando.length > 0 ? coverage.trabalhando.join(', ') : 'Nenhum'}</span>
+                    </div>
+                    <div className="text-xs text-on-surface-variant text-left">
+                      <span className="font-bold text-orange-500 mb-0.5 flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-orange-500"></span> Folgas/Ausentes:</span>
+                      <span className="opacity-80 block pl-2.5 leading-tight">{coverage.folgas.length > 0 ? coverage.folgas.join(' • ') : 'Nenhum'}</span>
+                    </div>
+                    <div className="absolute left-1/2 -bottom-2 -translate-x-1/2 border-8 border-transparent border-t-surface-container-highest"></div>
+                 </div>
+               </div>
              );
            })}
         </div>

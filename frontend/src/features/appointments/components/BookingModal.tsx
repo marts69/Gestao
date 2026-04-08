@@ -126,8 +126,8 @@ export function BookingModal({ receptionDate, initialTime, initialEmpId, clients
     setClientMode(draft.clientMode);
     setBookDate(draft.bookDate || receptionDate);
     setBookName(draft.bookName || '');
-    setBookPhone(draft.bookPhone || '');
-    setBookCpf(draft.bookCpf || '');
+    setBookPhone(formatPhone(draft.bookPhone || ''));
+    setBookCpf(formatCpf(draft.bookCpf || ''));
     setBookTime(draft.bookTime || initialTime);
     setBookEmp(draft.bookEmp || initialEmpId);
     setBookService(Array.isArray(draft.bookService) ? draft.bookService : []);
@@ -284,7 +284,7 @@ export function BookingModal({ receptionDate, initialTime, initialEmpId, clients
 
     setSelectedClientId(client.id);
     setBookName(client.nome);
-    setBookPhone(client.telefone || '');
+    setBookPhone(formatPhone(client.telefone || ''));
     setBookCpf(formatCpf(finalCpf));
     setBookClientObservation(parsed.note);
     setAnamneseData(parsed.anamData);
@@ -551,7 +551,7 @@ export function BookingModal({ receptionDate, initialTime, initialEmpId, clients
                         )}
                       </div>
                       <p className="text-[10px] text-on-surface-variant mt-0.5 truncate">
-                        {c.telefone || 'Sem telefone'}{c.cpf ? ` · CPF ${c.cpf}` : ''}
+                        {c.telefone ? formatPhone(c.telefone) : 'Sem telefone'}{c.cpf ? ` · CPF ${formatCpf(c.cpf)}` : ''}
                       </p>
                     </button>
                   ))}

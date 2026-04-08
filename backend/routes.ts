@@ -342,6 +342,56 @@ export function createRouter(io: Server) {
     return null;
   };
 
+  const verificarCLTInterjornada = async (
+    db: Pick<PrismaClient, 'agendamento'> | Prisma.TransactionClient,
+    colaboradorId: string,
+    dataNovaCapa: Date,
+    duracaoNova: number,
+    idAtual?: string
+  ): Promise<string | null> => {
+    const agAnterior = await db.agendamento.findFirst({
+      where: {
+        colaboradorId,
+        data: { lt: dataNovaCapa },
+        status: { not: 'cancelled' },
+        ...(idAtual ? { id: { not: idAtual } } : {})
+      },
+      include: { servicos: true },
+      orderBy: { data: 'desc' }
+    });
+
+    if (agAnterior) {
+      const duracaoAnterior = agAnterior.servicos.reduce((acc: number, s: any) => acc + (s.duracao || 60), 0) || 60;
+      const fimAnterior = addMinutes(agAnterior.data, duracaoAnterior);
+      const horasDescanso = (dataNovaCapa.getTime() - fimAnterior.getTime()) / (1000 * 60 * 60);
+      const diasDiferentes = fimAnterior.getDate() !== dataNovaCapa.getDate();
+      
+      if (horasDescanso > 0 && horasDescanso < 11 && (diasDiferentes || horasDescanso >= 4)) {
+        return `Violação CLT (Interjornada): O descanso entre o último atendimento (${format(fimAnterior, 'dd/MM HH:mm')}) e este (${format(dataNovaCapa, 'dd/MM HH:mm')}) é de apenas ${horasDescanso.toFixed(1)}h. O mínimo legal é 11h.`;
+      }
+    }
+
+    const fimNovo = addMinutes(dataNovaCapa, duracaoNova);
+    const agPosterior = await db.agendamento.findFirst({
+      where: {
+        colaboradorId,
+        data: { gte: fimNovo },
+        status: { not: 'cancelled' },
+        ...(idAtual ? { id: { not: idAtual } } : {})
+      },
+      orderBy: { data: 'asc' }
+    });
+
+    if (agPosterior) {
+      const horasDescanso = (agPosterior.data.getTime() - fimNovo.getTime()) / (1000 * 60 * 60);
+      const diasDiferentes = fimNovo.getDate() !== agPosterior.data.getDate();
+      if (horasDescanso > 0 && horasDescanso < 11 && (diasDiferentes || horasDescanso >= 4)) {
+        return `Violação CLT (Interjornada): O descanso entre este atendimento e o próximo (${format(agPosterior.data, 'dd/MM HH:mm')}) será de apenas ${horasDescanso.toFixed(1)}h. O mínimo legal é 11h.`;
+      }
+    }
+    return null;
+  };
+
   // 0. Rota de LOGIN (Pública - Sem bloqueio)
   router.post('/login', async (req, res) => {
     try {
@@ -545,6 +595,10 @@ export function createRouter(io: Server) {
         const conflito = await verificarConflito(tx, collaboratorId, parsedDate, duracao);
         if (conflito) throw httpError(409, 'Conflito de agenda com outro apontamento.');
 
+        // Validação CLT (Interjornada 11h)
+        const erroCLT = await verificarCLTInterjornada(tx, collaboratorId, parsedDate, duracao);
+        if (erroCLT) throw httpError(409, erroCLT);
+
         const eligibilityError = await getEligibilityErrorForCollaborator(tx, collaboratorId, servicosSelecionados);
         if (eligibilityError) throw httpError(409, eligibilityError);
 
@@ -674,6 +728,10 @@ export function createRouter(io: Server) {
         const duracao = servicosSelecionados.reduce((total, servico) => total + (servico.duracao || 60), 0) || 60;
         const conflito = await verificarConflito(tx, finalColaboradorId, finalDate, duracao, id);
         if (conflito) throw httpError(409, 'Conflito de agenda. O horário coincide com outro compromisso.');
+
+        // Validação CLT (Interjornada 11h)
+        const erroCLT = await verificarCLTInterjornada(tx, finalColaboradorId, finalDate, duracao, id);
+        if (erroCLT) throw httpError(409, erroCLT);
 
         const eligibilityError = await getEligibilityErrorForCollaborator(tx, finalColaboradorId, servicosSelecionados);
         if (eligibilityError) throw httpError(409, eligibilityError);
@@ -811,6 +869,10 @@ export function createRouter(io: Server) {
         const conflito = await verificarConflito(tx, colaboradorId, agendamentoAtualTx.data, duracao, id);
         if (conflito) throw httpError(409, 'Conflito de agenda. O horário coincide com outro compromisso.');
 
+        // Validação CLT (Interjornada 11h)
+        const erroCLT = await verificarCLTInterjornada(tx, colaboradorId, agendamentoAtualTx.data, duracao, id);
+        if (erroCLT) throw httpError(409, erroCLT);
+
         return tx.agendamento.update({
           where: { id },
           data: { colaboradorId },
@@ -873,6 +935,10 @@ export function createRouter(io: Server) {
         const duracao = agendamentoAtualTx.servicos.reduce((acc: number, servico: any) => acc + (servico.duracao || 60), 0) || 60;
         const conflito = await verificarConflito(tx, newEmployeeId, agendamentoAtualTx.data, duracao, id);
         if (conflito) throw httpError(409, 'Conflito de agenda. O horário coincide com outro compromisso.');
+
+        // Validação CLT (Interjornada 11h)
+        const erroCLT = await verificarCLTInterjornada(tx, newEmployeeId, agendamentoAtualTx.data, duracao, id);
+        if (erroCLT) throw httpError(409, erroCLT);
 
         return tx.agendamento.update({
           where: { id },
@@ -1542,6 +1608,126 @@ export function createRouter(io: Server) {
         return res.status((error as any).httpStatus).json({ erro: (error as any).httpMessage || 'Erro na requisição.' });
       }
       res.status(500).json({ erro: 'Erro ao replicar escala' });
+    }
+  });
+
+  // ---- Trocas de Turno (Portal do Colaborador -> Supervisor) ----
+  const SWAPS_FILE = path.join(process.cwd(), 'turno_swaps.json');
+  type TurnoSwapEntry = {
+    id: string;
+    colaboradorId: string;
+    dataOriginal: string;
+    dataSolicitada: string;
+    motivo?: string;
+    status: string;
+    respostaObservacao?: string;
+    criadoEm: string;
+    atualizadoEm: string;
+  };
+
+  const loadSwaps = async (): Promise<TurnoSwapEntry[]> => {
+    try { return JSON.parse(await fs.readFile(SWAPS_FILE, 'utf-8') || '[]'); } catch { return []; }
+  };
+  const saveSwaps = async (swaps: TurnoSwapEntry[]) => await fs.writeFile(SWAPS_FILE, JSON.stringify(swaps, null, 2), 'utf-8');
+
+  router.get('/trocas-turno', verificarToken, async (req, res) => {
+    try {
+      const tableCheck: any = await prisma.$queryRaw`SELECT to_regclass('public."TurnoSwapRequest"')::text as r`;
+      if (tableCheck?.[0]?.r) {
+        const trocas = await prisma.$queryRaw`SELECT * FROM "TurnoSwapRequest"`;
+        return res.json(trocas);
+      }
+      throw new Error('NO_TABLE');
+    } catch (e) {
+      const swaps = await loadSwaps();
+      res.json(swaps);
+    }
+  });
+
+  router.post('/trocas-turno', verificarToken, async (req, res) => {
+    try {
+      const { colaboradorId, dataOriginal, dataSolicitada, motivo, status } = req.body;
+      const entry = { id: crypto.randomUUID(), colaboradorId, dataOriginal, dataSolicitada, motivo, status: status || 'pendente', criadoEm: new Date().toISOString(), atualizadoEm: new Date().toISOString() };
+      
+      try {
+        const tableCheck: any = await prisma.$queryRaw`SELECT to_regclass('public."TurnoSwapRequest"')::text as r`;
+        if (tableCheck?.[0]?.r) {
+          await prisma.$executeRaw`INSERT INTO "TurnoSwapRequest" ("id", "colaboradorId", "dataOriginal", "dataSolicitada", "motivo", "status", "criadoEm", "atualizadoEm") VALUES (${entry.id}, ${entry.colaboradorId}, ${entry.dataOriginal}, ${entry.dataSolicitada}, ${entry.motivo}, ${entry.status}, ${new Date()}, ${new Date()})`;
+          notifyClients();
+          return res.status(201).json(entry);
+        }
+        throw new Error('NO_TABLE');
+      } catch (e) {
+        const swaps = await loadSwaps();
+        swaps.push(entry);
+        await saveSwaps(swaps);
+        notifyClients();
+        return res.status(201).json(entry);
+      }
+    } catch (error) {
+      res.status(500).json({ erro: 'Erro ao criar solicitação de troca.' });
+    }
+  });
+
+  router.patch('/trocas-turno/:id/status', verificarToken, verificarSupervisor, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { status, respostaObservacao } = req.body;
+
+      const nowIso = new Date().toISOString();
+      let swapAtualizada: TurnoSwapEntry | null = null;
+
+      try {
+        const tableCheck: any = await prisma.$queryRaw`SELECT to_regclass('public."TurnoSwapRequest"')::text as r`;
+        if (!tableCheck?.[0]?.r) throw new Error('NO_TABLE');
+
+        await prisma.$executeRaw`
+          UPDATE "TurnoSwapRequest"
+          SET "status" = ${status}, "atualizadoEm" = ${new Date()}
+          WHERE "id" = ${id}
+        `;
+
+        const rows: any = await prisma.$queryRaw`SELECT * FROM "TurnoSwapRequest" WHERE "id" = ${id} LIMIT 1`;
+        if (!rows?.[0]) return res.status(404).json({ erro: 'Solicitação não encontrada.' });
+
+        swapAtualizada = {
+          ...rows[0],
+          ...(respostaObservacao ? { respostaObservacao } : {}),
+        } as TurnoSwapEntry;
+      } catch (e) {
+        const swaps = await loadSwaps();
+        const idx = swaps.findIndex((s) => s.id === id);
+        if (idx === -1) return res.status(404).json({ erro: 'Solicitação não encontrada.' });
+
+        swaps[idx] = { ...swaps[idx], status, respostaObservacao, atualizadoEm: nowIso };
+        await saveSwaps(swaps);
+        swapAtualizada = swaps[idx];
+      }
+
+      // LÓGICA MÁGICA: Se o supervisor aprovar, a escala se ajusta sozinha instantaneamente
+      if (status === 'aprovada' && swapAtualizada) {
+        const { colaboradorId, dataOriginal, dataSolicitada } = swapAtualizada;
+        const overrides = await loadOverrides();
+        
+        // O dia que ele iria trabalhar (original) vira Folga
+        const keyOrig = `${colaboradorId}:${dataOriginal}`;
+        const idxOrig = overrides.findIndex((o: any) => o.key === keyOrig);
+        const entryOrig = { key: keyOrig, colaboradorId, data: dataOriginal, tipo: 'folga', turno: null, descricao: 'Troca de turno aprovada', atualizadoEm: nowIso };
+        if (idxOrig >= 0) overrides[idxOrig] = entryOrig; else overrides.push(entryOrig);
+        
+        // O dia que ele solicitou trabalhar vira dia de Trabalho
+        const keyDest = `${colaboradorId}:${dataSolicitada}`;
+        const idxDest = overrides.findIndex((o: any) => o.key === keyDest);
+        const entryDest = { key: keyDest, colaboradorId, data: dataSolicitada, tipo: 'trabalho', turno: '08:00-18:00', descricao: 'Turno de compensação', atualizadoEm: nowIso };
+        if (idxDest >= 0) overrides[idxDest] = entryDest; else overrides.push(entryDest);
+        
+        await saveOverrides(overrides);
+      }
+
+      notifyClients(); // Avisa o WebSocket para todos os navegadores atualizarem a tela
+      return res.json(swapAtualizada);
+    } catch (error) {
+      res.status(500).json({ erro: 'Erro ao atualizar solicitação de troca.' });
     }
   });
 

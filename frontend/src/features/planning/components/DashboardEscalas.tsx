@@ -67,9 +67,9 @@ export function DashboardEscalas({ employees, appointments }: DashboardEscalasPr
           <p className="text-2xl font-headline text-primary mt-1">{metrics.totalColaboradores}</p>
         </div>
 
-        <div className="rounded-2xl border border-outline-variant/20 bg-surface-container-low p-4">
-          <p className="text-[10px] font-bold uppercase tracking-widest text-outline">Alertas CLT</p>
-          <p className="text-2xl font-headline text-error mt-1">{metrics.alertas}</p>
+        <div className={`rounded-2xl border p-4 transition-colors ${metrics.alertas > 0 ? 'bg-amber-500/10 border-amber-500/30' : 'bg-surface-container-low border-outline-variant/20'}`}>
+          <p className={`text-[10px] font-bold uppercase tracking-widest ${metrics.alertas > 0 ? 'text-amber-700' : 'text-outline'}`}>Alertas CLT</p>
+          <p className={`text-2xl font-headline mt-1 ${metrics.alertas > 0 ? 'text-amber-600' : 'text-primary'}`}>{metrics.alertas}</p>
         </div>
       </div>
 
@@ -80,8 +80,8 @@ export function DashboardEscalas({ employees, appointments }: DashboardEscalasPr
               <p className="text-sm font-bold text-on-surface truncate">{row.nome}</p>
               <p className="text-[10px] uppercase tracking-widest text-on-surface-variant">{row.horas.toFixed(1)}h no ciclo</p>
             </div>
-            <span className={`text-[10px] font-bold uppercase tracking-widest px-2 py-1 rounded-full ${row.conforme ? 'bg-primary-container text-primary' : 'bg-error-container text-error'}`}>
-              {row.conforme ? 'Conforme' : 'Alerta'}
+            <span className={`text-[10px] font-bold uppercase tracking-widest px-2.5 py-1 rounded-full border ${row.conforme ? 'bg-emerald-500/10 text-emerald-700 border-emerald-500/20' : 'bg-amber-500/10 text-amber-700 border-amber-500/30'}`}>
+              {row.conforme ? 'Conforme' : 'Aviso CLT'}
             </span>
           </div>
         ))}

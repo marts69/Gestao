@@ -158,18 +158,21 @@ export function TimelineGantt({ employees, month, selectedMonth, onMonthChange, 
     return map;
   }, [daysInMonth, escalasByEmployee]);
 
-  const getBackgroundColor = (tipo: DiaEscala['tipo'], isWeekend: boolean) => {
+  const getBackgroundColor = (tipo: DiaEscala['tipo'], isWeekend: boolean, turno?: string) => {
     const weekendClass = isWeekend ? 'ring-1 ring-inset ring-outline-variant/25' : '';
-    switch (tipo) {
-      case 'trabalho':
-        return `bg-surface-container-low/70 hover:bg-surface-container ${weekendClass}`;
-      case 'folga':
-        return `bg-secondary-container/35 hover:bg-secondary-container/55 ${weekendClass}`;
-      case 'fds':
-        return `bg-tertiary/20 hover:bg-tertiary/35 ${weekendClass}`;
-      default:
-        return `bg-surface-container-low/50 ${weekendClass}`;
+    if (tipo === 'folga' || tipo === 'fds') return `bg-surface-variant/30 hover:bg-surface-variant/50 ${weekendClass}`;
+    if (tipo === 'trabalho') {
+      if (!turno) return `bg-emerald-500/15 hover:bg-emerald-500/25 ${weekendClass}`;
+      const [start] = turno.split('-');
+      const startHour = parseInt(start?.split(':')[0] || '8', 10);
+      if (startHour >= 5 && startHour < 12) {
+        if (turno.includes('18:00') || turno.includes('19:00') || turno.includes('17:00')) return `bg-emerald-500/15 hover:bg-emerald-500/30 ${weekendClass}`;
+        return `bg-blue-500/15 hover:bg-blue-500/30 ${weekendClass}`;
+      }
+      if (startHour >= 12 && startHour < 18) return `bg-indigo-500/15 hover:bg-indigo-500/30 ${weekendClass}`;
+      return `bg-purple-500/15 hover:bg-purple-500/30 ${weekendClass}`;
     }
+    return `bg-surface-container-low/50 ${weekendClass}`;
   };
 
   const getCellLabel = (dia?: DiaEscala) => {
@@ -259,18 +262,25 @@ export function TimelineGantt({ employees, month, selectedMonth, onMonthChange, 
               <div className="flex gap-0.5 p-2 bg-surface-container-low border-b border-outline-variant/10">
                 {dayMeta.map((meta) => {
                   const count = coverageByDay.get(meta.day) || 0;
-                  const isLow = typeof minStaffRequired === 'number' && count < minStaffRequired;
+                  const target = minStaffRequired || 0;
+                  const isLow = target > 0 && count < target;
+                  
+                  let heatClass = 'bg-surface-container-lowest text-on-surface border-outline-variant/20';
+                  if (target > 0) {
+                    if (isLow) {
+                      heatClass = 'bg-orange-100 text-orange-800 border-orange-300';
+                    } else {
+                      heatClass = 'bg-emerald-100 text-emerald-800 border-emerald-300';
+                    }
+                  }
+
                   return (
                     <div
                       key={`summary-${meta.day}`}
-                      className={`w-12 h-7 flex items-center justify-center text-[11px] font-bold rounded-lg border ${
-                        isLow
-                          ? 'bg-error/20 border-error/60 text-error'
-                          : 'bg-primary/20 border-primary/40 text-on-surface'
-                      } ${meta.isWeekend ? 'ring-1 ring-inset ring-outline-variant/20' : ''}`}
+                      className={`w-12 h-7 flex items-center justify-center text-[11px] font-bold rounded-lg border transition-colors ${heatClass} ${meta.isWeekend ? 'ring-1 ring-inset ring-outline-variant/20' : ''}`}
                       title={isLow ? 'Cobertura abaixo do mínimo' : 'Cobertura adequada'}
                     >
-                      <div className="flex items-center gap-0.5" aria-label={`Cobertura ${count}/${minStaffRequired || 0}`}>
+                      <div className="flex items-center gap-0.5" aria-label={`Cobertura ${count}/${target}`}>
                         {isLow && <span className="text-[10px] font-black">!</span>}
                         <span>{count}</span>
                       </div>
@@ -335,7 +345,7 @@ export function TimelineGantt({ employees, month, selectedMonth, onMonthChange, 
                       const borderClass = hasCltAlert
                         ? 'border-amber-400'
                         : isLow
-                          ? 'border-error/60'
+                          ? 'border-orange-400'
                           : 'border-outline-variant/20';
                       return (
                         <div key={meta.day} className="relative group">
@@ -398,10 +408,10 @@ export function TimelineGantt({ employees, month, selectedMonth, onMonthChange, 
                             }}
                             className={`w-12 h-12 flex flex-col items-center justify-center rounded-lg transition-all cursor-pointer border ${
                               borderClass
-                            } ${isSuggested ? 'border-dashed opacity-90' : ''} hover:border-primary/50 ${isDragTarget ? 'ring-2 ring-primary/80 shadow-md' : ''} ${getBackgroundColor(dia?.tipo || 'trabalho', meta.isWeekend)}`}
+                            } ${isSuggested ? 'border-dashed opacity-90' : ''} hover:border-primary/50 ${isDragTarget ? 'ring-2 ring-primary/80 shadow-md' : ''} ${getBackgroundColor(dia?.tipo || 'trabalho', meta.isWeekend, dia?.turno)}`}
                             title={`${emp.name} - ${dia?.data || ''} - ${dia?.descricao || ''}${hasCltAlert ? ' - Alerta CLT: descanso semanal' : ''}${isSuggested ? ' - Sugestão automática' : ''}`}
                           >
-                            <span className={`text-[8px] font-black leading-none ${dia?.tipo === 'folga' ? 'text-secondary' : dia?.tipo === 'fds' ? 'text-tertiary' : 'text-on-surface-variant'}`}>
+                            <span className={`text-[8px] font-black leading-none ${dia?.tipo === 'folga' || dia?.tipo === 'fds' ? 'opacity-60' : 'text-on-surface opacity-80'}`}>
                               {getCellLabel(dia)}
                             </span>
                             {dia?.tipo === 'trabalho' && dia.turno && (
@@ -410,7 +420,7 @@ export function TimelineGantt({ employees, month, selectedMonth, onMonthChange, 
                               </span>
                             )}
                             {hasAlert && (
-                              <span className={`absolute top-0.5 left-0.5 text-[8px] font-black ${hasCltAlert ? 'text-amber-400' : 'text-error'}`}>!</span>
+                              <span className={`absolute top-0.5 left-0.5 text-[8px] font-black ${hasCltAlert ? 'text-amber-400' : 'text-orange-600'}`}>!</span>
                             )}
                             {isSuggested && (
                               <span className="absolute bottom-0.5 left-0.5 w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
@@ -443,20 +453,32 @@ export function TimelineGantt({ employees, month, selectedMonth, onMonthChange, 
       {/* Legenda */}
       <div className="p-4 bg-surface-container-low border-t border-outline-variant/10 flex flex-wrap gap-4 items-center justify-center">
         <div className="flex items-center gap-2">
-          <span className="w-4 h-4 rounded bg-surface-container border border-outline-variant/30"></span>
-          <span className="text-[10px] text-on-surface-variant font-bold">Trabalho (padrão)</span>
+          <span className="w-4 h-4 rounded bg-blue-500/15 border-l-2 border-blue-500"></span>
+          <span className="text-[10px] text-on-surface-variant font-bold uppercase tracking-wider">Manhã</span>
         </div>
         <div className="flex items-center gap-2">
-          <span className="w-4 h-4 rounded bg-secondary-container/45 border border-secondary/50"></span>
-          <span className="text-[10px] text-on-surface-variant font-bold">Folga</span>
+          <span className="w-4 h-4 rounded bg-indigo-500/15 border-l-2 border-indigo-500"></span>
+          <span className="text-[10px] text-on-surface-variant font-bold uppercase tracking-wider">Tarde</span>
         </div>
         <div className="flex items-center gap-2">
-          <span className="w-4 h-4 rounded bg-tertiary/25 border border-tertiary/50"></span>
-          <span className="text-[10px] text-on-surface-variant font-bold">FDS</span>
+          <span className="w-4 h-4 rounded bg-purple-500/15 border-l-2 border-purple-500"></span>
+          <span className="text-[10px] text-on-surface-variant font-bold uppercase tracking-wider">Noite</span>
         </div>
         <div className="flex items-center gap-2">
-          <span className="w-4 h-4 rounded bg-error/25 border border-error/60 flex items-center justify-center text-[9px] font-black text-error">!</span>
-          <span className="text-[10px] text-on-surface-variant font-bold">Cobertura baixa / Alerta CLT</span>
+          <span className="w-4 h-4 rounded bg-emerald-500/15 border-l-2 border-emerald-500"></span>
+          <span className="text-[10px] text-on-surface-variant font-bold uppercase tracking-wider">Comercial / Outros</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="w-4 h-4 rounded bg-surface-variant/30 border border-outline-variant/30"></span>
+          <span className="text-[10px] text-on-surface-variant font-bold uppercase tracking-wider">Folga / FDS</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="w-4 h-4 rounded bg-orange-100 border border-orange-300 flex items-center justify-center text-[9px] font-black text-orange-800">!</span>
+          <span className="text-[10px] text-on-surface-variant font-bold">Cobertura baixa</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="w-4 h-4 rounded bg-surface-container border border-amber-400 flex items-center justify-center text-[9px] font-black text-amber-400">!</span>
+          <span className="text-[10px] text-on-surface-variant font-bold">Alerta CLT</span>
         </div>
       </div>
 

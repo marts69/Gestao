@@ -4,6 +4,7 @@ import { AppointmentScheduleFields } from '../../../components/AppointmentSchedu
 import { AppointmentModalShell } from '../../../components/AppointmentModalShell';
 import { validateAppointmentScheduling } from '../utils/appointmentValidation';
 import { isApiError } from '../../../api';
+import { formatPhone } from '../../../utils/formatters';
 
 export interface EditAppointmentModalProps {
   appointment: Appointment;
@@ -17,7 +18,10 @@ export interface EditAppointmentModalProps {
 }
 
 export function EditAppointmentModal({ appointment, employees, services, appointments, onClose, onEditAppointment, setErrorMessage, setToastMessage }: EditAppointmentModalProps) {
-  const [editingAppointment, setEditingAppointment] = useState<Appointment>(appointment);
+  const [editingAppointment, setEditingAppointment] = useState<Appointment>({
+    ...appointment,
+    contact: appointment.contact && /\d/.test(appointment.contact) ? formatPhone(appointment.contact) : appointment.contact,
+  });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [conflictMessage, setConflictMessage] = useState<string | null>(null);
   const isEditingCompleted = editingAppointment.status === 'completed';
@@ -95,7 +99,7 @@ export function EditAppointmentModal({ appointment, employees, services, appoint
     >
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div><label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-2">Cliente</label><input required type="text" value={editingAppointment.clientName} onChange={e => setEditingAppointment(p => p && ({...p, clientName: e.target.value}))} disabled={isEditingCompleted} className={`w-full bg-surface-container-low border border-outline-variant/20 rounded-xl p-3 text-sm ${isEditingCompleted ? 'opacity-50 cursor-not-allowed' : ''}`} /></div>
-        <div><label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-2">Telefone</label><input type="text" value={editingAppointment.contact} onChange={e => setEditingAppointment(p => p && ({...p, contact: e.target.value}))} disabled={isEditingCompleted} className={`w-full bg-surface-container-low border border-outline-variant/20 rounded-xl p-3 text-sm ${isEditingCompleted ? 'opacity-50 cursor-not-allowed' : ''}`} /></div>
+        <div><label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-2">Telefone</label><input type="text" value={editingAppointment.contact} onChange={e => setEditingAppointment(p => p && ({...p, contact: formatPhone(e.target.value)}))} maxLength={15} placeholder="(00) 00000-0000" disabled={isEditingCompleted} className={`w-full bg-surface-container-low border border-outline-variant/20 rounded-xl p-3 text-sm ${isEditingCompleted ? 'opacity-50 cursor-not-allowed' : ''}`} /></div>
       </div>
       <AppointmentScheduleFields
         date={editingAppointment.date}

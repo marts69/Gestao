@@ -135,13 +135,28 @@ export function CalendarioEscala({ escalas, year, month, selectedMonth, onMonthC
           const isToday = day === today;
           const isPast = day < today;
 
-          const bgClass = isTrabalho
-            ? 'bg-surface-container-low/75 border-outline-variant/35'
-            : isFolga
-              ? 'bg-secondary-container/35 border-secondary/45'
-              : isFds
-                ? 'bg-tertiary/25 border-tertiary/45'
-                : 'bg-surface-container-low/50 border-outline-variant/20';
+          let bgClass = 'bg-surface-container-low/50 border-outline-variant/20 text-on-surface-variant';
+          if (isFolga || isFds) {
+            bgClass = 'bg-surface-variant/20 border-dashed border-2 border-outline-variant/40 text-on-surface-variant';
+          } else if (isTrabalho) {
+            const t = escala?.turno || '';
+            const [start] = t.split('-');
+            const startHour = parseInt(start?.split(':')[0] || '8', 10);
+            
+            if (startHour >= 12 && startHour < 18) {
+              bgClass = 'bg-indigo-500/10 border-l-4 border-indigo-500 text-indigo-700 hover:bg-indigo-500/20';
+            } else if (startHour >= 18 || startHour < 5) {
+              bgClass = 'bg-purple-500/10 border-l-4 border-purple-500 text-purple-700 hover:bg-purple-500/20';
+            } else if (startHour >= 5 && startHour < 12) {
+              if (t.includes('18:00') || t.includes('19:00') || t.includes('17:00')) {
+                bgClass = 'bg-emerald-500/10 border-l-4 border-emerald-500 text-emerald-700 hover:bg-emerald-500/20'; // Comercial
+              } else {
+                bgClass = 'bg-blue-500/10 border-l-4 border-blue-500 text-blue-700 hover:bg-blue-500/20'; // Manhã
+              }
+            } else {
+              bgClass = 'bg-emerald-500/10 border-l-4 border-emerald-500 text-emerald-700 hover:bg-emerald-500/20'; // Fallback
+            }
+          }
 
           const weekendClass = isWeekend ? 'ring-1 ring-inset ring-outline-variant/25' : '';
           const pastClass = isPast && day !== today ? 'opacity-50' : '';
@@ -163,14 +178,13 @@ export function CalendarioEscala({ escalas, year, month, selectedMonth, onMonthC
               : '';
 
           return (
-            <button
-              key={day}
-              onClick={() => onDayClick?.(day)}
-              disabled={!isInteractive}
-              className={`h-20 rounded-xl border p-3 text-left flex flex-col justify-between transition-all ${bgClass} ${weekendClass} ${pastClass} ${todayClass} ${interactiveClass} ${hasCltAlert ? 'border-error/60' : ''} disabled:cursor-default`}
-              title={`${escala?.descricao || 'Sem escala definida'}${hasCltAlert ? ' - Alerta CLT: descanso semanal' : ''}`}
-            >
-              <div className="flex items-start justify-between gap-1">
+            <div key={day} className="relative group h-20">
+              <button
+                onClick={() => onDayClick?.(day)}
+                disabled={!isInteractive}
+                className={`w-full h-full rounded-xl border p-3 text-left flex flex-col justify-between transition-all ${bgClass} ${weekendClass} ${pastClass} ${todayClass} ${interactiveClass} ${hasCltAlert ? 'border-error/60 ring-2 ring-error/50' : ''} disabled:cursor-default`}
+              >
+              <div className="flex items-start justify-between gap-1 w-full">
                 <div className={`text-sm font-bold ${isToday ? 'text-primary' : 'text-on-surface'}`}>
                   {day}
                 </div>
@@ -184,38 +198,76 @@ export function CalendarioEscala({ escalas, year, month, selectedMonth, onMonthC
                 )}
               </div>
 
-              <div className="flex flex-col gap-0.5">
-                <div className={`text-[10px] font-black tracking-wide ${isFolga ? 'text-secondary' : isFds ? 'text-tertiary' : 'text-on-surface-variant'}`}>
+              <div className="flex flex-col gap-0.5 w-full">
+                <div className={`text-[10px] font-black tracking-wide ${isFolga || isFds ? 'opacity-60' : 'opacity-90'}`}>
                   {primaryLabel}
                 </div>
 
                 {secondaryLabel && (
-                  <div className="text-[9px] font-semibold text-on-surface-variant truncate">{secondaryLabel}</div>
+                  <div className="text-[9px] font-semibold opacity-75 truncate w-full">{secondaryLabel}</div>
                 )}
               </div>
-            </button>
+              </button>
+
+              {/* Tooltip Nativo CSS Flutuante */}
+              {escala && (
+                 <div className="absolute z-50 bottom-full mb-2 hidden group-hover:flex flex-col w-56 p-3 bg-surface-container-highest shadow-2xl rounded-2xl text-sm border border-outline-variant pointer-events-none left-1/2 -translate-x-1/2">
+                    <div className="font-bold text-primary mb-1 border-b border-outline-variant/30 pb-1">
+                      {String(day).padStart(2, '0')}/{String(month).padStart(2, '0')}/{year}
+                    </div>
+                    <div className="text-xs text-on-surface mb-1 mt-1">
+                      <span className="font-bold">Status:</span> {isFolga ? 'Folga' : isFds ? 'Fim de Semana' : 'Trabalho'}
+                    </div>
+                    {isTrabalho && escala.turno && (
+                      <div className="text-xs text-on-surface mb-1">
+                        <span className="font-bold">Turno:</span> {escala.turno}
+                      </div>
+                    )}
+                    {escala.descricao && (
+                      <div className="text-xs text-on-surface-variant italic mt-1">
+                        "{escala.descricao}"
+                      </div>
+                    )}
+                    {hasCltAlert && (
+                      <div className="text-xs text-error font-bold mt-2 flex items-center gap-1 bg-error/10 p-1.5 rounded-lg border border-error/20">
+                        <span className="material-symbols-outlined text-[14px]">warning</span>
+                        Falta de Descanso Semanal
+                      </div>
+                    )}
+                    <div className="absolute left-1/2 -bottom-2 -translate-x-1/2 border-8 border-transparent border-t-surface-container-highest"></div>
+                 </div>
+              )}
+            </div>
           );
         })}
       </div>
 
-      {/* Legenda */}
-      <div className="mt-5 pt-4 border-t border-outline-variant/10 grid grid-cols-2 sm:grid-cols-4 gap-3">
+      {/* Legenda Atualizada */}
+      <div className="mt-5 pt-4 border-t border-outline-variant/10 flex flex-wrap gap-4">
         <div className="flex items-center gap-2">
-          <span className="w-4 h-4 rounded bg-surface-container border border-outline-variant/30"></span>
-          <span className="text-[9px] text-on-surface-variant font-bold">Trabalho</span>
+          <span className="w-4 h-4 rounded bg-blue-500/10 border-l-2 border-blue-500"></span>
+          <span className="text-[9px] text-on-surface-variant font-bold uppercase tracking-wider">Manhã</span>
         </div>
         <div className="flex items-center gap-2">
-          <span className="w-4 h-4 rounded bg-secondary-container/45 border border-secondary/50"></span>
-          <span className="text-[9px] text-on-surface-variant font-bold">Folga</span>
+          <span className="w-4 h-4 rounded bg-indigo-500/10 border-l-2 border-indigo-500"></span>
+          <span className="text-[9px] text-on-surface-variant font-bold uppercase tracking-wider">Tarde</span>
         </div>
         <div className="flex items-center gap-2">
-          <span className="w-4 h-4 rounded bg-tertiary/25 border border-tertiary/50"></span>
-          <span className="text-[9px] text-on-surface-variant font-bold">FDS</span>
+          <span className="w-4 h-4 rounded bg-purple-500/10 border-l-2 border-purple-500"></span>
+          <span className="text-[9px] text-on-surface-variant font-bold uppercase tracking-wider">Noite</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="w-4 h-4 rounded bg-emerald-500/10 border-l-2 border-emerald-500"></span>
+          <span className="text-[9px] text-on-surface-variant font-bold uppercase tracking-wider">Outro Turno</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="w-4 h-4 rounded bg-surface-variant/20 border-dashed border-2 border-outline-variant/40"></span>
+          <span className="text-[9px] text-on-surface-variant font-bold uppercase tracking-wider">Folga/FDS</span>
         </div>
         {isInteractive && (
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 ml-auto">
             <span className="text-lg">👆</span>
-            <span className="text-[9px] text-on-surface-variant font-bold">Clicável</span>
+            <span className="text-[9px] text-on-surface-variant font-bold uppercase tracking-wider">Clicável para editar</span>
           </div>
         )}
       </div>

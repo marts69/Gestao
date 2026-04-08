@@ -123,10 +123,13 @@ export const EmployeeScheduleColumn = React.memo(({ emp }: EmployeeScheduleColum
     const draggedAppointment = appointments.find((appointment) => appointment.id === appointmentId);
     if (!draggedAppointment || draggedAppointment.assignedEmployeeId === emp.id) return;
 
-    const success = await onReassignAppointment(appointmentId, emp.id);
-    if (success !== false) {
+    try {
+      await onReassignAppointment(appointmentId, emp.id);
       setToastMessage(`Agendamento movido para ${emp.name}.`);
       setTimeout(() => setToastMessage(null), 2500);
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : 'Erro ao realocar agendamento.';
+      setErrorMessage(msg); // Exibe o modal vermelho com a explicação do conflito CLT
     }
   };
 

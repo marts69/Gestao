@@ -50,6 +50,43 @@ export function SupervisorEquipeTab({ employees, onAddEmployee, onDeleteEmployee
   const EMPLOYEES_PER_PAGE = 6;
   const SKILL_OPTIONS = ['Massagem', 'Acupuntura', 'Fisioterapia', 'Aromaterapia', 'Drenagem Linfática'];
 
+  // --- NOVOS ESTADOS PARA GESTÃO (CARGOS E TURNOS) ---
+  const [activeSubTab, setActiveSubTab] = useState<'profissionais' | 'gestao'>('profissionais');
+  const [cargos, setCargos] = useState<{id: string, nome: string}[]>([
+    { id: '1', nome: 'Massoterapeuta' },
+    { id: '2', nome: 'Esteticista' },
+    { id: '3', nome: 'Recepcionista' },
+  ]);
+  const [novoCargo, setNovoCargo] = useState('');
+  
+  const [turnos, setTurnos] = useState<{id: string, nome: string, inicio: string, fim: string}[]>([
+    { id: '1', nome: 'Turno Manhã', inicio: '06:00', fim: '14:00' },
+    { id: '2', nome: 'Turno Tarde', inicio: '14:00', fim: '22:00' },
+    { id: '3', nome: 'Turno Noite', inicio: '22:00', fim: '06:00' },
+    { id: '4', nome: 'Comercial', inicio: '08:00', fim: '18:00' },
+  ]);
+  const [novoTurnoNome, setNovoTurnoNome] = useState('');
+  const [novoTurnoInicio, setNovoTurnoInicio] = useState('08:00');
+  const [novoTurnoFim, setNovoTurnoFim] = useState('18:00');
+
+  const handleAddCargo = (e: React.FormEvent) => {
+    e.preventDefault();
+    if(!novoCargo.trim()) return;
+    setCargos([...cargos, { id: Date.now().toString(), nome: novoCargo.trim() }]);
+    setNovoCargo('');
+    setToastMessage('Cargo adicionado.');
+    setTimeout(() => setToastMessage(null), 2000);
+  };
+
+  const handleAddTurno = (e: React.FormEvent) => {
+    e.preventDefault();
+    if(!novoTurnoNome.trim() || !novoTurnoInicio || !novoTurnoFim) return;
+    setTurnos([...turnos, { id: Date.now().toString(), nome: novoTurnoNome.trim(), inicio: novoTurnoInicio, fim: novoTurnoFim }]);
+    setNovoTurnoNome('');
+    setToastMessage('Turno adicionado.');
+    setTimeout(() => setToastMessage(null), 2000);
+  };
+
   const generateEmployeeEmail = (fullName: string) => {
     const normalized = fullName
       .trim()
@@ -214,93 +251,185 @@ export function SupervisorEquipeTab({ employees, onAddEmployee, onDeleteEmployee
 
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-4 w-full">
-      <div className="bg-surface-container-lowest p-5 rounded-3xl border border-outline-variant/10 shadow-sm">
-        <div className="flex flex-col md:flex-row md:items-center gap-3 justify-between">
-          <div className="relative w-full md:w-80">
-            <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-outline-variant text-[18px]">search</span>
-            <input
-              type="text"
-              value={searchTerm}
-              onChange={e => { setSearchTerm(e.target.value); setEmployeeCurrentPage(1); }}
-              placeholder="Buscar profissional..."
-              className="w-full pl-10 pr-4 py-2 bg-surface-container-low border border-outline-variant/30 text-sm rounded-xl focus:ring-1 focus:ring-primary text-on-surface"
-            />
-          </div>
-          <button
-            type="button"
-            onClick={() => openCreateEmployeeForm()}
-            className="bg-primary text-on-primary px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-widest shadow-sm hover:bg-primary-dim transition-colors flex items-center gap-2 whitespace-nowrap"
-          >
-            <span className="material-symbols-outlined text-[18px]">person_add</span>
-            Criar Usuário
-          </button>
-        </div>
+      {/* Controle de Navegação Interna da Aba */}
+      <div className="flex bg-surface-container-low p-1 rounded-full border border-outline-variant/20 overflow-x-auto max-w-fit mb-6">
+        <button
+          onClick={() => setActiveSubTab('profissionais')}
+          className={`px-6 py-2 rounded-full text-xs font-bold tracking-wide uppercase whitespace-nowrap transition-all ${activeSubTab === 'profissionais' ? 'bg-primary text-on-primary shadow-md' : 'text-on-surface-variant hover:text-primary'}`}
+        >
+          Profissionais
+        </button>
+        <button
+          onClick={() => setActiveSubTab('gestao')}
+          className={`px-6 py-2 rounded-full text-xs font-bold tracking-wide uppercase whitespace-nowrap transition-all ${activeSubTab === 'gestao' ? 'bg-primary text-on-primary shadow-md' : 'text-on-surface-variant hover:text-primary'}`}
+        >
+          Regras e Turnos
+        </button>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {paginatedEmployees.map(emp => (
-          <div key={emp.id} className="bg-surface-container-lowest p-5 rounded-3xl border border-outline-variant/10 shadow-sm">
-            <div className="flex items-center gap-3">
-              <img src={emp.avatar} alt={emp.name} className="w-12 h-12 rounded-full object-cover border border-outline-variant/30" />
-              <div className="min-w-0">
-                <h4 className="text-sm font-bold text-on-surface truncate">{emp.name}</h4>
-                <p className="text-xs text-on-surface-variant truncate">{emp.email}</p>
-                <p className="text-[10px] uppercase tracking-widest text-primary mt-1">{emp.specialty}</p>
-                <p className="text-[10px] text-on-surface-variant mt-1">{emp.tipoEscala || '6x1'} • {emp.cargaHorariaSemanal || 40}h/sem</p>
-                <p className="text-[10px] text-on-surface-variant">Domingos de folga/mês: {emp.folgasDomingoNoMes ?? 2}</p>
+      {activeSubTab === 'profissionais' ? (
+        <>
+          <div className="bg-surface-container-lowest p-5 rounded-3xl border border-outline-variant/10 shadow-sm">
+            <div className="flex flex-col md:flex-row md:items-center gap-3 justify-between">
+              <div className="relative w-full md:w-80">
+                <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-outline-variant text-[18px]">search</span>
+                <input
+                  type="text"
+                  value={searchTerm}
+                  onChange={e => { setSearchTerm(e.target.value); setEmployeeCurrentPage(1); }}
+                  placeholder="Buscar profissional..."
+                  className="w-full pl-10 pr-4 py-2 bg-surface-container-low border border-outline-variant/30 text-sm rounded-xl focus:ring-1 focus:ring-primary text-on-surface"
+                />
+              </div>
+              <button
+                type="button"
+                onClick={() => openCreateEmployeeForm()}
+                className="bg-primary text-on-primary px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-widest shadow-sm hover:bg-primary-dim transition-colors flex items-center gap-2 whitespace-nowrap"
+              >
+                <span className="material-symbols-outlined text-[18px]">person_add</span>
+                Criar Usuário
+              </button>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {paginatedEmployees.map(emp => (
+              <div key={emp.id} className="bg-surface-container-lowest p-5 rounded-3xl border border-outline-variant/10 shadow-sm">
+                <div className="flex items-center gap-3">
+                  <img src={emp.avatar} alt={emp.name} className="w-12 h-12 rounded-full object-cover border border-outline-variant/30" />
+                  <div className="min-w-0">
+                    <h4 className="text-sm font-bold text-on-surface truncate">{emp.name}</h4>
+                    <p className="text-xs text-on-surface-variant truncate">{emp.email}</p>
+                    <p className="text-[10px] uppercase tracking-widest text-primary mt-1">{emp.specialty}</p>
+                    <p className="text-[10px] text-on-surface-variant mt-1">{emp.tipoEscala || '6x1'} • {emp.cargaHorariaSemanal || 40}h/sem</p>
+                    <p className="text-[10px] text-on-surface-variant">Domingos de folga/mês: {emp.folgasDomingoNoMes ?? 2}</p>
+                  </div>
+                </div>
+                <div className="mt-4 flex justify-end gap-2 border-t border-outline-variant/10 pt-3">
+                  <button
+                    onClick={() => openScheduleModal(emp)}
+                    className="p-2 text-on-surface-variant hover:bg-primary-container/20 hover:text-primary rounded-full"
+                    title="Montar escala"
+                  >
+                    <span className="material-symbols-outlined text-[20px]">schedule</span>
+                  </button>
+                  <button
+                    onClick={() => setViewingEmployee(emp)}
+                    className="p-2 text-on-surface-variant hover:bg-surface-container/40 hover:text-primary rounded-full"
+                    title="Ver folgas"
+                  >
+                    <span className="material-symbols-outlined text-[20px]">event_busy</span>
+                  </button>
+                  <button
+                    onClick={() => {
+                      setEditingEmployeeId(emp.id);
+                      setNewEmpName(emp.name);
+                      setNewEmpEmail(emp.email);
+                      setNewEmpSpecialty(emp.specialty);
+                      setNewEmpCargo(emp.cargo || '');
+                      setNewEmpTipoEscala(emp.tipoEscala || '6x1');
+                      setNewEmpFolgasDomingoNoMes(emp.folgasDomingoNoMes ?? 2);
+                      setNewEmpCargaHoraria(emp.cargaHorariaSemanal || 40);
+                      setNewEmpHabilidades(emp.habilidades || []);
+                      setNewEmpRole(emp.role === 'supervisor' ? 'supervisor' : 'collaborator');
+                      setNewEmpDiasTrabalho((emp.diasTrabalho || '1,2,3,4,5,6').split(','));
+                      setShowEmployeeForm(true);
+                    }}
+                    className="p-2 text-on-surface-variant hover:bg-primary-container/20 hover:text-primary rounded-full"
+                  >
+                    <span className="material-symbols-outlined text-[20px]">edit</span>
+                  </button>
+                  <button
+                    onClick={() => setEmployeeToDelete(emp.id)}
+                    className="p-2 text-on-surface-variant hover:bg-error-container/20 hover:text-error rounded-full"
+                  >
+                    <span className="material-symbols-outlined text-[20px]">delete</span>
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {totalPages > 1 && (
+            <div className="flex justify-between items-center pt-2">
+              <span className="text-xs text-on-surface-variant">Página {employeeCurrentPage} de {totalPages}</span>
+              <div className="flex gap-2">
+                <button onClick={() => setEmployeeCurrentPage(p => Math.max(1, p - 1))} disabled={employeeCurrentPage === 1} className="px-3 py-1 rounded-lg border border-outline-variant/30 text-sm disabled:opacity-40">Anterior</button>
+                <button onClick={() => setEmployeeCurrentPage(p => Math.min(totalPages, p + 1))} disabled={employeeCurrentPage === totalPages} className="px-3 py-1 rounded-lg border border-outline-variant/30 text-sm disabled:opacity-40">Próxima</button>
               </div>
             </div>
-            <div className="mt-4 flex justify-end gap-2 border-t border-outline-variant/10 pt-3">
-              <button
-                onClick={() => openScheduleModal(emp)}
-                className="p-2 text-on-surface-variant hover:bg-primary-container/20 hover:text-primary rounded-full"
-                title="Montar escala"
-              >
-                <span className="material-symbols-outlined text-[20px]">schedule</span>
-              </button>
-              <button
-                onClick={() => setViewingEmployee(emp)}
-                className="p-2 text-on-surface-variant hover:bg-surface-container/40 hover:text-primary rounded-full"
-                title="Ver folgas"
-              >
-                <span className="material-symbols-outlined text-[20px]">event_busy</span>
-              </button>
-              <button
-                onClick={() => {
-                  setEditingEmployeeId(emp.id);
-                  setNewEmpName(emp.name);
-                  setNewEmpEmail(emp.email);
-                  setNewEmpSpecialty(emp.specialty);
-                  setNewEmpCargo(emp.cargo || '');
-                  setNewEmpTipoEscala(emp.tipoEscala || '6x1');
-                  setNewEmpFolgasDomingoNoMes(emp.folgasDomingoNoMes ?? 2);
-                  setNewEmpCargaHoraria(emp.cargaHorariaSemanal || 40);
-                  setNewEmpHabilidades(emp.habilidades || []);
-                  setNewEmpRole(emp.role === 'supervisor' ? 'supervisor' : 'collaborator');
-                  setNewEmpDiasTrabalho((emp.diasTrabalho || '1,2,3,4,5,6').split(','));
-                  setShowEmployeeForm(true);
-                }}
-                className="p-2 text-on-surface-variant hover:bg-primary-container/20 hover:text-primary rounded-full"
-              >
-                <span className="material-symbols-outlined text-[20px]">edit</span>
-              </button>
-              <button
-                onClick={() => setEmployeeToDelete(emp.id)}
-                className="p-2 text-on-surface-variant hover:bg-error-container/20 hover:text-error rounded-full"
-              >
-                <span className="material-symbols-outlined text-[20px]">delete</span>
-              </button>
+          )}
+        </>
+      ) : (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* CARD GESTÃO DE CARGOS */}
+          <div className="bg-surface-container-lowest p-6 rounded-3xl border border-outline-variant/10 shadow-sm flex flex-col h-100">
+            <div className="flex items-center gap-3 mb-6 shrink-0">
+              <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary">
+                <span className="material-symbols-outlined">badge</span>
+              </div>
+              <div>
+                <h3 className="text-lg font-headline text-primary">Gestão de Cargos</h3>
+                <p className="text-xs text-on-surface-variant">Cargos disponíveis para a equipe</p>
+              </div>
             </div>
-          </div>
-        ))}
-      </div>
 
-      {totalPages > 1 && (
-        <div className="flex justify-between items-center pt-2">
-          <span className="text-xs text-on-surface-variant">Página {employeeCurrentPage} de {totalPages}</span>
-          <div className="flex gap-2">
-            <button onClick={() => setEmployeeCurrentPage(p => Math.max(1, p - 1))} disabled={employeeCurrentPage === 1} className="px-3 py-1 rounded-lg border border-outline-variant/30 text-sm disabled:opacity-40">Anterior</button>
-            <button onClick={() => setEmployeeCurrentPage(p => Math.min(totalPages, p + 1))} disabled={employeeCurrentPage === totalPages} className="px-3 py-1 rounded-lg border border-outline-variant/30 text-sm disabled:opacity-40">Próxima</button>
+            <div className="space-y-2 flex-1 overflow-y-auto custom-scrollbar pr-2 mb-4">
+              {cargos.map(cargo => (
+                <div key={cargo.id} className="flex items-center justify-between p-3 rounded-xl bg-surface-container-low border border-outline-variant/20 group">
+                  <span className="text-sm font-bold text-on-surface">{cargo.nome}</span>
+                  <button onClick={() => setCargos(cargos.filter(c => c.id !== cargo.id))} className="text-on-surface-variant hover:text-error transition-colors p-1 rounded-full opacity-0 group-hover:opacity-100"><span className="material-symbols-outlined text-[18px]">delete</span></button>
+                </div>
+              ))}
+              {cargos.length === 0 && <p className="text-xs text-center text-on-surface-variant pt-4">Nenhum cargo cadastrado.</p>}
+            </div>
+
+            <form onSubmit={handleAddCargo} className="flex gap-2 pt-4 border-t border-outline-variant/10 shrink-0">
+              <input type="text" value={novoCargo} onChange={e => setNovoCargo(e.target.value)} placeholder="Novo cargo..." className="flex-1 bg-surface-container-low border border-outline-variant/20 rounded-xl px-3 py-2 text-sm focus:ring-1 focus:ring-primary outline-none" required />
+              <button type="submit" className="bg-primary text-on-primary px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wider shadow-sm hover:bg-primary-dim transition-all whitespace-nowrap">Adicionar</button>
+            </form>
+          </div>
+
+          {/* CARD GESTÃO DE TURNOS */}
+          <div className="bg-surface-container-lowest p-6 rounded-3xl border border-outline-variant/10 shadow-sm flex flex-col h-100">
+            <div className="flex items-center gap-3 mb-6 shrink-0">
+              <div className="w-10 h-10 rounded-full bg-indigo-500/10 flex items-center justify-center text-indigo-500">
+                <span className="material-symbols-outlined">schedule</span>
+              </div>
+              <div>
+                <h3 className="text-lg font-headline text-primary">Turnos Padrão</h3>
+                <p className="text-xs text-on-surface-variant">Horários pré-definidos de escala</p>
+              </div>
+            </div>
+
+            <div className="space-y-2 flex-1 overflow-y-auto custom-scrollbar pr-2 mb-4">
+              {turnos.map(turno => (
+                <div key={turno.id} className="flex items-center justify-between p-3 rounded-xl bg-surface-container-low border border-outline-variant/20 group">
+                  <div>
+                    <p className="text-sm font-bold text-on-surface leading-tight">{turno.nome}</p>
+                    <p className="text-[10px] text-on-surface-variant uppercase tracking-widest mt-0.5">{turno.inicio} às {turno.fim}</p>
+                  </div>
+                  <button onClick={() => setTurnos(turnos.filter(t => t.id !== turno.id))} className="text-on-surface-variant hover:text-error transition-colors p-1 rounded-full opacity-0 group-hover:opacity-100"><span className="material-symbols-outlined text-[18px]">delete</span></button>
+                </div>
+              ))}
+            </div>
+
+            <form onSubmit={handleAddTurno} className="flex flex-col gap-3 pt-4 border-t border-outline-variant/10 shrink-0">
+              <input type="text" value={novoTurnoNome} onChange={e => setNovoTurnoNome(e.target.value)} placeholder="Nome do turno (Ex: Madrugada)" className="w-full bg-surface-container-low border border-outline-variant/20 rounded-xl px-3 py-2 text-sm focus:ring-1 focus:ring-primary outline-none" required />
+              <div className="flex gap-2">
+                <div className="flex-1">
+                  <label className="block text-[9px] font-bold uppercase tracking-widest text-on-surface-variant mb-1">Início</label>
+                  <input type="time" value={novoTurnoInicio} onChange={e => setNovoTurnoInicio(e.target.value)} className="w-full bg-surface-container-low border border-outline-variant/20 rounded-xl px-3 py-2 text-sm focus:ring-1 focus:ring-primary outline-none" required />
+                </div>
+                <div className="flex-1">
+                  <label className="block text-[9px] font-bold uppercase tracking-widest text-on-surface-variant mb-1">Fim</label>
+                  <input type="time" value={novoTurnoFim} onChange={e => setNovoTurnoFim(e.target.value)} className="w-full bg-surface-container-low border border-outline-variant/20 rounded-xl px-3 py-2 text-sm focus:ring-1 focus:ring-primary outline-none" required />
+                </div>
+                <div className="flex items-end">
+                  <button type="submit" className="h-9.5 bg-primary text-on-primary px-4 rounded-xl text-xs font-bold uppercase tracking-wider shadow-sm hover:bg-primary-dim transition-all">Criar</button>
+                </div>
+              </div>
+            </form>
           </div>
         </div>
       )}
@@ -330,7 +459,10 @@ export function SupervisorEquipeTab({ employees, onAddEmployee, onDeleteEmployee
                 )}
               </div>
               <input required type="text" value={newEmpSpecialty} onChange={e => setNewEmpSpecialty(e.target.value)} placeholder="Especialidade" className="w-full bg-surface-container-lowest border border-outline-variant/20 rounded-xl p-3 text-sm" />
-              <input type="text" value={newEmpCargo} onChange={e => setNewEmpCargo(e.target.value)} placeholder="Cargo (Ex: Massoterapista)" className="w-full bg-surface-container-lowest border border-outline-variant/20 rounded-xl p-3 text-sm" />
+              <select value={newEmpCargo} onChange={e => setNewEmpCargo(e.target.value)} className="w-full bg-surface-container-lowest border border-outline-variant/20 rounded-xl p-3 text-sm text-on-surface">
+                <option value="">Selecione o Cargo...</option>
+                {cargos.map(c => <option key={c.id} value={c.nome}>{c.nome}</option>)}
+              </select>
               <select value={newEmpRole} onChange={e => setNewEmpRole(e.target.value as 'supervisor' | 'collaborator')} className="w-full bg-surface-container-lowest border border-outline-variant/20 rounded-xl p-3 text-sm">
                 <option value="collaborator">Colaborador</option>
                 <option value="supervisor">Supervisor</option>
@@ -389,7 +521,7 @@ export function SupervisorEquipeTab({ employees, onAddEmployee, onDeleteEmployee
       )}
 
       {createdCredentials && (
-        <div className="fixed inset-0 bg-black/55 backdrop-blur-sm z-[60] p-4 flex items-center justify-center" onMouseDown={(event) => { if (event.target === event.currentTarget) setCreatedCredentials(null); }}>
+        <div className="fixed inset-0 bg-black/55 backdrop-blur-sm z-60 p-4 flex items-center justify-center" onMouseDown={(event) => { if (event.target === event.currentTarget) setCreatedCredentials(null); }}>
           <motion.div initial={{ opacity: 0, scale: 0.95, y: 10 }} animate={{ opacity: 1, scale: 1, y: 0 }} className="bg-surface-container-low p-6 rounded-3xl border border-outline-variant/10 shadow-2xl w-full max-w-lg" onMouseDown={(event) => event.stopPropagation()}>
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-headline text-primary">Credenciais Criadas</h3>
@@ -437,7 +569,7 @@ export function SupervisorEquipeTab({ employees, onAddEmployee, onDeleteEmployee
       />
 
       {viewingEmployee && (
-        <div className="fixed inset-0 bg-black/55 backdrop-blur-sm z-[70] p-4 flex items-center justify-center" onMouseDown={(event) => { if (event.target === event.currentTarget) setViewingEmployee(null); }}>
+        <div className="fixed inset-0 bg-black/55 backdrop-blur-sm z-70 p-4 flex items-center justify-center" onMouseDown={(event) => { if (event.target === event.currentTarget) setViewingEmployee(null); }}>
           <motion.div initial={{ opacity: 0, scale: 0.95, y: 10 }} animate={{ opacity: 1, scale: 1, y: 0 }} className="bg-surface-container-low p-6 rounded-3xl border border-outline-variant/10 shadow-2xl w-full max-w-lg" onMouseDown={(event) => event.stopPropagation()}>
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-headline text-primary">Folgas do colaborador</h3>
@@ -497,6 +629,18 @@ export function SupervisorEquipeTab({ employees, onAddEmployee, onDeleteEmployee
                 </div>
               </div>
 
+              {turnos.length > 0 && (
+                <div className="mb-2">
+                  <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-on-surface-variant mb-2">Preenchimento Rápido (Turnos)</p>
+                  <div className="flex flex-wrap gap-2">
+                    {turnos.map(t => (
+                      <button key={t.id} type="button" onClick={() => { setScheduleHourStart(t.inicio); setScheduleHourEnd(t.fim); }} className="px-3 py-1.5 rounded-lg border border-outline-variant/30 bg-surface-container hover:bg-primary/10 hover:border-primary/40 hover:text-primary text-[11px] font-bold text-on-surface-variant transition-colors">
+                        {t.nome} ({t.inicio} às {t.fim})
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-[10px] font-bold text-on-surface-variant tracking-[0.15em] uppercase mb-2">Horário Início</label>
