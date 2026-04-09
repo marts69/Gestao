@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Appointment, Bloqueio, Client, Employee, Service, TurnoSwapRequest, TurnoSwapStatus } from './types';
+import { Appointment, Bloqueio, Client, Employee, Service, ServiceEligibilityMode, TurnoSwapRequest, TurnoSwapStatus } from './types';
 import { getApiUrl } from './config/api';
 
 export class ApiError extends Error {
@@ -157,6 +157,22 @@ interface BackendEmployee {
   bloqueios?: Employee['bloqueios'];
 }
 
+interface BackendService {
+  id: string | number;
+  nome?: string;
+  preco?: number | string;
+  duracao?: number | string | null;
+  icone?: string | null;
+  descricao?: string | null;
+  modoElegibilidade?: string | null;
+  cargosPermitidos?: string[] | null;
+  habilidadesPermitidas?: string[] | null;
+  profissionaisPermitidos?: string[] | null;
+  categoria?: string | null;
+  tempoHigienizacaoMin?: number | string | null;
+  comissaoPercentual?: number | string | null;
+}
+
 interface BackendTurnoSwapRequest {
   id: string | number;
   colaboradorId: string;
@@ -236,6 +252,36 @@ const normalizeEmployee = (employee: BackendEmployee): Employee => {
     cargaHorariaSemanal: typeof employee.cargaHorariaSemanal === 'number' ? employee.cargaHorariaSemanal : undefined,
     habilidades: Array.isArray(employee.habilidades) ? employee.habilidades : [],
     bloqueios: Array.isArray(employee.bloqueios) ? employee.bloqueios : [],
+  };
+};
+
+const normalizeServiceEligibilityMode = (value: unknown): ServiceEligibilityMode => {
+  if (value === 'cargo' || value === 'habilidade' || value === 'profissional' || value === 'livre') return value;
+  return 'livre';
+};
+
+const normalizeService = (service: BackendService): Service => {
+  const parsedPrice = Number(service.preco);
+  const parsedDuration = Number(service.duracao);
+  const parsedHigiene = Number(service.tempoHigienizacaoMin);
+  const parsedComissao = service.comissaoPercentual === null || service.comissaoPercentual === undefined || service.comissaoPercentual === ''
+    ? undefined
+    : Number(service.comissaoPercentual);
+
+  return {
+    id: String(service.id),
+    nome: typeof service.nome === 'string' ? service.nome : 'Serviço',
+    preco: Number.isFinite(parsedPrice) && parsedPrice >= 0 ? parsedPrice : 0,
+    duracao: Number.isFinite(parsedDuration) && parsedDuration > 0 ? parsedDuration : 60,
+    icone: typeof service.icone === 'string' && service.icone.trim() ? service.icone : 'spa',
+    descricao: typeof service.descricao === 'string' ? service.descricao : '',
+    modoElegibilidade: normalizeServiceEligibilityMode(service.modoElegibilidade),
+    cargosPermitidos: Array.isArray(service.cargosPermitidos) ? service.cargosPermitidos.filter((value): value is string => typeof value === 'string') : [],
+    habilidadesPermitidas: Array.isArray(service.habilidadesPermitidas) ? service.habilidadesPermitidas.filter((value): value is string => typeof value === 'string') : [],
+    profissionaisPermitidos: Array.isArray(service.profissionaisPermitidos) ? service.profissionaisPermitidos.filter((value): value is string => typeof value === 'string') : [],
+    categoria: typeof service.categoria === 'string' ? service.categoria : '',
+    tempoHigienizacaoMin: Number.isFinite(parsedHigiene) && parsedHigiene >= 0 ? parsedHigiene : 0,
+    comissaoPercentual: Number.isFinite(parsedComissao) ? parsedComissao : undefined,
   };
 };
 
@@ -556,7 +602,10 @@ export const useReplicateScaleDays = (token: string | null) => {
 // =======================
 export const useServices = (token: string | null) => useQuery({
   queryKey: ['services'],
-  queryFn: () => fetchApi('/servicos', token),
+  queryFn: async () => {
+    const services = await fetchApi('/servicos', token);
+    return Array.isArray(services) ? services.map(normalizeService) : [];
+  },
   enabled: !!token,
 });
 

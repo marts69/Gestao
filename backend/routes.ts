@@ -1110,6 +1110,14 @@ export function createRouter(io: Server) {
       return { erro: 'A descrição deve ter no máximo 500 caracteres.' };
     }
 
+    if (!Number.isInteger(tempoHigienizacaoMin) || tempoHigienizacaoMin < 0) {
+      return { erro: 'O tempo de higienização deve ser um número inteiro (maior ou igual a zero).' };
+    }
+
+    if (comissaoPercentual !== null && (!Number.isFinite(comissaoPercentual) || comissaoPercentual < 0 || comissaoPercentual > 100)) {
+      return { erro: 'A comissão deve ser um valor entre 0 e 100%.' };
+    }
+
     if (modoElegibilidade === 'cargo' && cargosPermitidos.length === 0) {
       return { erro: 'Selecione ao menos um cargo para serviços com restrição por cargo.' };
     }

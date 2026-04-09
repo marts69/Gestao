@@ -43,6 +43,10 @@ model Servico {
   preco                Float
   duracao              Int?          @default(60)
   icone                String?       @default("spa")
+  descricao            String?       @default("")
+  categoria            String?       @default("")
+  tempoHigienizacaoMin Int?          @default(0)
+  comissaoPercentual   Float?
   modoElegibilidade    String        @default("livre")
   cargosPermitidos     String[]      @default([])
   habilidadesPermitidas String[]     @default([])

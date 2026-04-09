@@ -455,8 +455,8 @@ Manutenibilidade: 60% → ~84% (em progresso para 95%)
 - [x] Campo `Categoria` no formulário com opções iniciais de negócio de Spa.
 - [x] Campo `Tempo de Higienização` no formulário com validação numérica.
 - [x] Campo `Comissão Padrão (%)` com validação de faixa e tratamento de valor vazio.
-- [ ] Ajuste de regra de agenda para considerar `duração + higienização` no bloqueio total.
-- [ ] Regressão técnica obrigatória (`npm run lint` + `npm run build`).
+- [x] Ajuste de regra de agenda para considerar `duração + higienização` no bloqueio total.
+- [x] Regressão técnica obrigatória (`npm run lint` + `npm run build`).
 - Critério de aceite P0: cadastro/edição funcionando fim a fim, sem quebra de tipagem e sem sobreposição indevida de agendamentos.
 
 #### P1 - Experiência premium e produtividade da recepção
@@ -473,14 +473,14 @@ Manutenibilidade: 60% → ~84% (em progresso para 95%)
 - Critério de aceite P2: operador consegue restringir execução por equipe sem ambiguidade e sem regressão de usabilidade.
 
 ### Dependências e Ordem de Implementação
-- [ ] Implementar P0 antes de P1 (P1 depende da modelagem final de formulário).
-- [ ] Implementar P1 antes de P2 (P2 depende da estrutura visual/listagem estabilizada).
-- [ ] Publicar versão alpha incremental após cada milestone concluído com resumo `adicionado` + `corrigido`.
+- [x] Implementar P0 antes de P1 (P1 depende da modelagem final de formulário).
+- [x] Implementar P1 antes de P2 (P2 depende da estrutura visual/listagem estabilizada).
+- [x] Publicar versão alpha incremental após cada milestone concluído com resumo `adicionado` + `corrigido`.
 
 ### Quebra Técnica P0 por Arquivo (plano direto de execução)
 
 #### Frontend - Tela de Serviços
-- [ ] `frontend/src/features/services/components/SupervisorServicosTab.tsx`
+- [x] `frontend/src/features/services/components/SupervisorServicosTab.tsx`
   1. Corrigir acentuação de labels, títulos, placeholders e mensagens de feedback.
   2. Inserir campo `Categoria` (`<select>` com opções de Spa).
   3. Inserir campo `Tempo de Higienização (min)` com validação de inteiro >= 0.
@@ -488,55 +488,55 @@ Manutenibilidade: 60% → ~84% (em progresso para 95%)
   5. Atualizar payload de create/update para enviar os novos campos.
 
 #### Frontend - Contratos e camada de dados
-- [ ] `frontend/src/types.ts`
+- [x] `frontend/src/types.ts`
   1. Estender tipo `Service` com `categoria`, `tempoHigienizacaoMin`, `comissaoPercentual`.
-- [ ] `frontend/src/api.ts`
+- [x] `frontend/src/api.ts`
   1. Normalizar parse dos novos campos em leitura/escrita.
   2. Garantir fallback seguro para dados legados (quando campo não existir).
 
 #### Backend - Modelo e validações
-- [ ] `prisma/schema.prisma`
+- [x] `prisma/schema.prisma`
   1. Adicionar colunas para `categoria`, `tempoHigienizacaoMin`, `comissaoPercentual` no modelo de serviços.
-- [ ] `prisma/migrations/*`
+- [x] `prisma/migrations/*`
   1. Criar migration para os novos campos com defaults compatíveis para base existente.
-- [ ] `backend/routes.ts`
+- [x] `backend/routes.ts`
   1. Validar entrada dos novos campos (tipo, faixa e obrigatoriedade por regra de negócio).
   2. Persistir e retornar os campos em create/update/list sem quebrar consumidores atuais.
 
 #### Regras de agenda (impacto operacional)
-- [ ] `frontend/src/features/appointments/utils/appointmentCore.ts`
+- [x] `frontend/src/features/appointments/utils/appointmentCore.ts`
   1. Ajustar cálculo de duração total para considerar `duração + higienização`.
-- [ ] `backend/routes.ts`
+- [x] `backend/routes.ts`
   1. Ajustar cálculo de conflito para considerar duração efetiva total do serviço.
   2. Revalidar mensagens de conflito para refletir bloqueio operacional real.
 
 #### Validação técnica de fechamento P0
-- [ ] `npm run lint`
-- [ ] `node ./node_modules/typescript/bin/tsc --noEmit -p tsconfig.json`
-- [ ] `npm --prefix frontend run build`
+- [x] `npm run lint`
+- [x] `node ./node_modules/typescript/bin/tsc --noEmit -p tsconfig.json`
+- [x] `npm --prefix frontend run build`
 - [ ] Smoke manual: criar serviço com higienização e confirmar bloqueio real no agendamento.
 
 ### Tickets de Execução (Amanhã - 08/04/2026)
 
 #### Sprint P0 - Aba Serviços Premium (estimativa total: 8h a 12h)
-- [ ] **P0.1 - Contrato de dados e tipagem (1h a 1.5h)**
+- [x] **P0.1 - Contrato de dados e tipagem (1h a 1.5h)**
   1. Estender tipo `Service` com `categoria`, `tempoHigienizacaoMin`, `comissaoPercentual`.
   2. Ajustar parse/normalização na camada de API para aceitar legado sem quebra.
   3. Arquivos alvo: `frontend/src/types.ts`, `frontend/src/api.ts`.
 
-- [ ] **P0.2 - Formulário de Serviços (2h a 3h)**
+- [x] **P0.2 - Formulário de Serviços (2h a 3h)**
   1. Inserir campos `Categoria`, `Tempo de Higienização`, `Comissão (%)`.
   2. Aplicar validações de faixa/tipo e revisão ortográfica completa da aba.
   3. Garantir payload de create/update com os novos campos.
   4. Arquivo alvo: `frontend/src/features/services/components/SupervisorServicosTab.tsx`.
 
-- [ ] **P0.3 - Backend: schema + migration + rotas (2h a 3h)**
+- [x] **P0.3 - Backend: schema + migration + rotas (2h a 3h)**
   1. Atualizar modelo Prisma para novos campos de serviço.
   2. Criar migration com defaults compatíveis para base existente.
   3. Validar/persistir novos campos em create/update/list nas rotas.
   4. Arquivos alvo: `prisma/schema.prisma`, `prisma/migrations/*`, `backend/routes.ts`.
 
-- [ ] **P0.4 - Regras de agenda com duração efetiva (1h a 2h)**
+- [x] **P0.4 - Regras de agenda com duração efetiva (1h a 2h)**
   1. Ajustar cálculo de duração para `duração + higienização` no frontend.
   2. Ajustar conflito de agenda no backend com mesma regra.
   3. Revisar mensagens de conflito para refletir tempo operacional real.
@@ -586,9 +586,9 @@ Manutenibilidade: 60% → ~84% (em progresso para 95%)
 - Plano de contingência: checklist de rollback rápido (reverter commit da feature + manter versão alpha anterior estável).
 
 ### Checklist de Mitigação (go/no-go do dia)
-- [ ] Confirmar fallback de dados legados ativo antes do deploy local.
+- [x] Confirmar fallback de dados legados ativo antes do deploy local.
 - [ ] Confirmar migration validada em base de teste com snapshot.
-- [ ] Confirmar cálculo de duração total idêntico entre frontend/backend.
+- [x] Confirmar cálculo de duração total idêntico entre frontend/backend.
 - [ ] Confirmar smoke com cenários de erro e borda, não apenas fluxo feliz.
 - [ ] Confirmar estratégia de rollback pronta antes do push final.
 
