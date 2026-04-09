@@ -9,12 +9,19 @@ interface SupervisorEquipeTabProps {
   onAddEmployee: (employee: Omit<Employee, 'id' | 'rating' | 'completedServices'>) => Promise<boolean | string | void> | void;
   onDeleteEmployee: (id: string, reallocateToId?: string) => void;
   onEditEmployee: (id: string, employee: Partial<Employee>) => Promise<boolean | string | void> | void;
+  onSaveScaleOverride?: (payload: { colaboradorId: string; data: string; tipo: 'trabalho' | 'folga' | 'fds'; turno?: string; descricao?: string }) => Promise<boolean | string | void> | void;
   setToastMessage: (msg: string | null) => void;
   setErrorMessage: (msg: string | null) => void;
   onViewEmployee?: (emp: Employee) => void;
 }
 
-export function SupervisorEquipeTab({ employees, onAddEmployee, onDeleteEmployee, onEditEmployee, setToastMessage, setErrorMessage, onViewEmployee }: SupervisorEquipeTabProps) {
+const getTodayLocalDate = () => {
+  const now = new Date();
+  const local = new Date(now.getTime() - now.getTimezoneOffset() * 60_000);
+  return local.toISOString().slice(0, 10);
+};
+
+export function SupervisorEquipeTab({ employees, onAddEmployee, onDeleteEmployee, onEditEmployee, onSaveScaleOverride, setToastMessage, setErrorMessage, onViewEmployee }: SupervisorEquipeTabProps) {
   const DEFAULT_PASSWORD = '123456';
   const WEEK_DAYS = [
     { value: '0', label: 'DOM' },
@@ -46,9 +53,14 @@ export function SupervisorEquipeTab({ employees, onAddEmployee, onDeleteEmployee
   const [scheduleHourStart, setScheduleHourStart] = useState('09:00');
   const [scheduleHourEnd, setScheduleHourEnd] = useState('18:00');
   const [scheduleDays, setScheduleDays] = useState<string[]>(['1','2','3','4','5','6']);
+  const [bulkSelectedEmployeeIds, setBulkSelectedEmployeeIds] = useState<string[]>([]);
+  const [bulkShiftSelection, setBulkShiftSelection] = useState<'' | 'manha' | 'tarde' | 'folga'>('');
+  const [bulkTargetDate, setBulkTargetDate] = useState(getTodayLocalDate());
+  const [isApplyingBulkShift, setIsApplyingBulkShift] = useState(false);
   const [createdCredentials, setCreatedCredentials] = useState<{ name: string; email: string; password: string } | null>(null);
   const EMPLOYEES_PER_PAGE = 6;
   const SKILL_OPTIONS = ['Massagem', 'Acupuntura', 'Fisioterapia', 'Aromaterapia', 'Drenagem Linfática'];
+  const selectableEmployees = useMemo(() => employees.filter((emp) => emp.id !== 'admin'), [employees]);
 
   // --- NOVOS ESTADOS PARA GESTÃO (CARGOS E TURNOS) ---
   const [activeSubTab, setActiveSubTab] = useState<'profissionais' | 'gestao'>('profissionais');
@@ -212,12 +224,143 @@ export function SupervisorEquipeTab({ employees, onAddEmployee, onDeleteEmployee
     setScheduleDays((emp.diasTrabalho || '1,2,3,4,5,6').split(','));
     setScheduleHourStart('09:00');
     setScheduleHourEnd('18:00');
+    setBulkSelectedEmployeeIds([emp.id]);
+    setBulkShiftSelection('');
+    setBulkTargetDate(getTodayLocalDate());
     setShowScheduleModal(true);
   };
 
   const closeScheduleModal = () => {
     setShowScheduleModal(false);
     setSelectedEmpForSchedule(null);
+    setBulkSelectedEmployeeIds([]);
+    setBulkShiftSelection('');
+    setIsApplyingBulkShift(false);
+  };
+
+  const toggleBulkSelection = (employeeId: string) => {
+    setBulkSelectedEmployeeIds((prev) => (
+      prev.includes(employeeId)
+        ? prev.filter((id) => id !== employeeId)
+        : [...prev, employeeId]
+    ));
+  };
+
+  const toggleSelectAllBulk = () => {
+    setBulkSelectedEmployeeIds((prev) => {
+      if (prev.length === selectableEmployees.length) return [];
+      return selectableEmployees.map((emp) => emp.id);
+    });
+  };
+
+  const handleBulkShiftChange = (value: '' | 'manha' | 'tarde' | 'folga') => {
+    setBulkShiftSelection(value);
+    if (value === 'manha') {
+      setScheduleHourStart('06:00');
+      setScheduleHourEnd('14:00');
+      if (scheduleDays.length === 0) setScheduleDays(['1', '2', '3', '4', '5', '6']);
+      return;
+    }
+
+    if (value === 'tarde') {
+      setScheduleHourStart('14:00');
+      setScheduleHourEnd('22:00');
+      if (scheduleDays.length === 0) setScheduleDays(['1', '2', '3', '4', '5', '6']);
+      return;
+    }
+
+    if (value === 'folga') {
+      setScheduleDays([]);
+    }
+  };
+
+  const handleApplyBulkShift = async () => {
+    if (!onSaveScaleOverride) {
+      setErrorMessage('A API de escala em lote não está disponível neste ambiente.');
+      return;
+    }
+
+    if (bulkSelectedEmployeeIds.length === 0) {
+      setErrorMessage('Selecione ao menos um colaborador para aplicar em lote.');
+      return;
+    }
+
+    if (!bulkShiftSelection) {
+      setErrorMessage('Selecione um turno para aplicar em lote.');
+      return;
+    }
+
+    if (!bulkTargetDate) {
+      setErrorMessage('Informe uma data de aplicação para a escala em lote.');
+      return;
+    }
+
+    setIsApplyingBulkShift(true);
+
+    const payloadFromShift = (employeeId: string) => {
+      if (bulkShiftSelection === 'folga') {
+        return {
+          colaboradorId: employeeId,
+          data: bulkTargetDate,
+          tipo: 'folga' as const,
+          descricao: 'Aplicação em lote (Folga)',
+        };
+      }
+
+      const turnoLabel = bulkShiftSelection === 'manha' ? '06:00-14:00' : '14:00-22:00';
+      return {
+        colaboradorId: employeeId,
+        data: bulkTargetDate,
+        tipo: 'trabalho' as const,
+        turno: turnoLabel,
+        descricao: `Aplicação em lote (${bulkShiftSelection === 'manha' ? 'Manhã' : 'Tarde'})`,
+      };
+    };
+
+    try {
+      const settled = await Promise.allSettled(
+        bulkSelectedEmployeeIds.map((employeeId) => Promise.resolve(onSaveScaleOverride(payloadFromShift(employeeId))))
+      );
+
+      let failedCount = 0;
+      let firstFailureMessage: string | null = null;
+
+      settled.forEach((result) => {
+        if (result.status === 'rejected') {
+          failedCount += 1;
+          if (!firstFailureMessage) {
+            firstFailureMessage = result.reason instanceof Error ? result.reason.message : 'Falha ao aplicar escala em lote.';
+          }
+          return;
+        }
+
+        if (result.value === false || typeof result.value === 'string') {
+          failedCount += 1;
+          if (!firstFailureMessage && typeof result.value === 'string') {
+            firstFailureMessage = result.value;
+          }
+        }
+      });
+
+      if (failedCount > 0) {
+        const successCount = bulkSelectedEmployeeIds.length - failedCount;
+        setErrorMessage(firstFailureMessage || 'Parte da aplicação em lote falhou.');
+        if (successCount > 0) {
+          setToastMessage(`Lote parcial: ${successCount} aplicado(s), ${failedCount} com falha.`);
+          setTimeout(() => setToastMessage(null), 3500);
+        }
+        return;
+      }
+
+      const shiftLabel = bulkShiftSelection === 'folga' ? 'Folga' : bulkShiftSelection === 'manha' ? 'Manhã' : 'Tarde';
+      setToastMessage(`Escala em lote aplicada (${shiftLabel}) para ${bulkSelectedEmployeeIds.length} colaborador(es).`);
+      setTimeout(() => setToastMessage(null), 3500);
+      closeScheduleModal();
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : 'Erro ao aplicar turno em lote.');
+    } finally {
+      setIsApplyingBulkShift(false);
+    }
   };
 
   const handleSaveSchedule = async () => {
@@ -579,6 +722,67 @@ export function SupervisorEquipeTab({ employees, onAddEmployee, onDeleteEmployee
               <div>
                 <p className="text-sm font-bold text-on-surface mb-2">{selectedEmpForSchedule?.name}</p>
                 <p className="text-xs text-on-surface-variant">{selectedEmpForSchedule?.specialty}</p>
+              </div>
+
+              <div className="rounded-2xl border border-outline-variant/20 bg-surface-container-lowest p-4 space-y-3">
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-on-surface-variant">Edição em Lote (Bulk Edit)</p>
+                  <button
+                    type="button"
+                    onClick={toggleSelectAllBulk}
+                    className="text-[10px] font-bold uppercase tracking-widest text-primary hover:opacity-80"
+                  >
+                    {bulkSelectedEmployeeIds.length === selectableEmployees.length ? 'Limpar seleção' : 'Selecionar todos'}
+                  </button>
+                </div>
+
+                <div className="max-h-32 overflow-y-auto rounded-xl border border-outline-variant/20 bg-surface-container p-2 custom-scrollbar">
+                  {selectableEmployees.map((emp) => (
+                    <label key={emp.id} className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-surface-container-high cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={bulkSelectedEmployeeIds.includes(emp.id)}
+                        onChange={() => toggleBulkSelection(emp.id)}
+                        className="w-4 h-4 accent-primary"
+                      />
+                      <span className="text-xs text-on-surface truncate">{emp.name}</span>
+                    </label>
+                  ))}
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[10px] font-bold text-on-surface-variant tracking-[0.15em] uppercase mb-2">Data da Aplicação</label>
+                    <input
+                      type="date"
+                      value={bulkTargetDate}
+                      onChange={(e) => setBulkTargetDate(e.target.value)}
+                      className="w-full bg-surface-container-low border border-outline-variant/20 rounded-xl p-3 text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-on-surface-variant tracking-[0.15em] uppercase mb-2">Turno em Lote</label>
+                    <select
+                      value={bulkShiftSelection}
+                      onChange={(e) => handleBulkShiftChange(e.target.value as '' | 'manha' | 'tarde' | 'folga')}
+                      className="w-full bg-surface-container-low border border-outline-variant/20 rounded-xl p-3 text-sm"
+                    >
+                      <option value="">Escolha o turno...</option>
+                      <option value="manha">Manhã (06:00 - 14:00)</option>
+                      <option value="tarde">Tarde (14:00 - 22:00)</option>
+                      <option value="folga">Folga</option>
+                    </select>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleApplyBulkShift}
+                  disabled={isApplyingBulkShift || bulkSelectedEmployeeIds.length === 0 || !bulkShiftSelection}
+                  className="w-full bg-secondary text-on-secondary py-2.5 rounded-xl font-bold text-xs uppercase tracking-[0.18em] shadow-sm hover:opacity-90 disabled:opacity-60"
+                >
+                  {isApplyingBulkShift ? 'Aplicando...' : 'Aplicar em lote'}
+                </button>
               </div>
 
               <div>

@@ -739,9 +739,16 @@ export default function PerfilColaborador() {
 ```
 
 ### Checklist Fase 2: Lógica do Modal de Edição em Lote (Bulk Edit)
-- [ ] **5. Estado de Seleção Múltipla:** Implementar controle de estado (`array` de IDs) para armazenar os colaboradores selecionados.
-- [ ] **6. Interface de Seleção com Checkboxes:** Renderizar lista de funcionários rolável dentro do modal com checkboxes individuais de seleção.
-- [ ] **7. Aplicação em Massa de Turno:** Integrar o dropdown de turnos (Manhã, Tarde, Folga) a um botão "Aplicar" que execute a mudança na API para todos os IDs selecionados de uma vez.
+- [x] **5. Estado de Seleção Múltipla:** Implementar controle de estado (`array` de IDs) para armazenar os colaboradores selecionados.
+- [x] **6. Interface de Seleção com Checkboxes:** Renderizar lista de funcionários rolável dentro do modal com checkboxes individuais de seleção.
+- [x] **7. Aplicação em Massa de Turno:** Integrar o dropdown de turnos (Manhã, Tarde, Folga) a um botão "Aplicar" que execute a mudança na API para todos os IDs selecionados de uma vez.
+
+**Evidência (09/04/2026):**
+- Modal de escala da Equipe atualizado com seleção múltipla por checkbox + ação de "Selecionar todos".
+- Dropdown de turno (Manhã/Tarde/Folga) conectado ao botão "Aplicar em lote" com chamada da API `onSaveScaleOverride` para todos os IDs selecionados.
+- Comandos de ambiente alvo executados com sucesso em `backend/`:
+  - `node ../node_modules/prisma/build/index.js migrate deploy --schema=./prisma/schema.prisma` (sem migrations pendentes)
+  - `node ../node_modules/prisma/build/index.js generate --schema=./prisma/schema.prisma` (Prisma Client v6.19.2 gerado)
 
 **💻 Exemplo de Código (Lógica de Seleção Múltipla):**
 ```typescriptreact

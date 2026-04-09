@@ -1199,6 +1199,7 @@ export function SupervisorView({ employees, appointments, services, clients, sca
           onAddEmployee={onAddEmployee}
           onDeleteEmployee={onDeleteEmployee}
           onEditEmployee={onEditEmployee}
+          onSaveScaleOverride={onSaveScaleOverride}
           setToastMessage={setToastMessage}
           setErrorMessage={setErrorMessage}
           onViewEmployee={setViewingEmployee}
