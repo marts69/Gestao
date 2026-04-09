@@ -21,6 +21,7 @@ export function Layout({ children, userName, userRole, activeView, onViewChange,
   const [showSettings, setShowSettings] = useState(false);
   const settingsRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
+  const hasCltAlerts = cltAlertsCount > 0;
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -123,10 +124,14 @@ export function Layout({ children, userName, userRole, activeView, onViewChange,
             {userRole === 'supervisor' && activeView === 'supervisor' && onOpenCltAlerts && (
               <button
                 onClick={onOpenCltAlerts}
-                className="relative text-on-surface-variant hover:bg-surface-container hover:text-primary w-10 h-10 flex items-center justify-center rounded-full transition-all"
+                className={`relative w-10 h-10 flex items-center justify-center rounded-full transition-all ${
+                  hasCltAlerts
+                    ? 'text-error bg-error/10 ring-1 ring-error/40 hover:bg-error/15'
+                    : 'text-on-surface-variant hover:bg-surface-container hover:text-primary'
+                }`}
                 title="Alertas e Auditoria"
               >
-                <span className="material-symbols-outlined">notifications</span>
+                <span className="material-symbols-outlined">{hasCltAlerts ? 'notifications_active' : 'notifications'}</span>
                 {cltAlertsCount > 0 && (
                   <span className="absolute top-1 right-1 w-3.5 h-3.5 bg-error text-on-error text-[8px] font-bold rounded-full flex items-center justify-center shadow-sm border border-surface">
                     {cltAlertsCount > 9 ? '9+' : cltAlertsCount}

@@ -2,7 +2,7 @@ import React, { useMemo } from 'react';
 import { Appointment, Employee } from '../../../types';
 import { getLocalTodayString } from '../../appointments/utils/appointmentCore';
 import { analisarConformidadeCLT } from '../../../utils/cltValidator';
-import { calcularHorasEscala, gerarEscala } from '../../../utils/escalaCalculator';
+import { aplicarFolgasDomingoNoMes, calcularHorasEscala, gerarEscala } from '../../../utils/escalaCalculator';
 
 interface DashboardEscalasProps {
   employees: Employee[];
@@ -15,7 +15,7 @@ export function DashboardEscalas({ employees, appointments }: DashboardEscalasPr
     const referenceDate = getLocalTodayString();
 
     const rows = activeEmployees.map((emp) => {
-      const escala = gerarEscala(
+      const escalaBase = gerarEscala(
         {
           tipo: emp.tipoEscala || '6x1',
           dataInicio: referenceDate,
@@ -23,12 +23,13 @@ export function DashboardEscalas({ employees, appointments }: DashboardEscalasPr
         28,
       );
 
-      const horas = calcularHorasEscala(escala).horasTrabalhadas;
-      const analise = analisarConformidadeCLT(
-        appointments.filter((app) => app.assignedEmployeeId === emp.id),
-        emp.bloqueios || [],
-        referenceDate,
+      const escala = aplicarFolgasDomingoNoMes(
+        escalaBase,
+        emp.folgasDomingoNoMes ?? 2,
       );
+
+      const horas = calcularHorasEscala(escala).horasTrabalhadas;
+      const analise = analisarConformidadeCLT(escala);
 
       return {
         id: emp.id,

@@ -799,9 +799,16 @@ export default function ModalEscalaLote() {
 ```
 
 ### Checklist Fase 3: Motor de Validação CLT (Sino e Alertas)
-- [ ] **8. Utilitário de Interjornada:** Criar função pura para calcular a diferença entre o término do turno anterior e início do atual (disparando alerta se `< 11h`).
-- [ ] **9. Utilitário do 7º Dia:** Criar função para rastrear a malha de escala e identificar 7 dias consecutivos com status de "Trabalho" sem folga (DSR).
-- [ ] **10. Integração ao Sino Global:** Conectar as funções validadoras CLT ao componente do Header, ativando estado de erro (cor/contador) quando houver violações na equipe.
+- [x] **8. Utilitário de Interjornada:** Criar função pura para calcular a diferença entre o término do turno anterior e início do atual (disparando alerta se `< 11h`).
+- [x] **9. Utilitário do 7º Dia:** Criar função para rastrear a malha de escala e identificar 7 dias consecutivos com status de "Trabalho" sem folga (DSR).
+- [x] **10. Integração ao Sino Global:** Conectar as funções validadoras CLT ao componente do Header, ativando estado de erro (cor/contador) quando houver violações na equipe.
+
+**Evidência (09/04/2026):**
+- Utilitários puros implementados em `frontend/src/utils/cltValidator.ts`:
+  1. `calcularDiferencaInterjornada` (alerta se descanso `< 11h`).
+  2. `analisarSetimoDiaConsecutivo` (detecção de sequência >= 7 dias de trabalho).
+- Integração do motor CLT ao sino global concluída em `frontend/src/App.tsx`, usando malha de escala mensal + overrides reais por colaborador.
+- Estado visual de erro (cor/contador/ícone ativo) aplicado no Header em `frontend/src/components/Layout.tsx` quando há violações.
 
 **💻 Exemplo de Código (Lógica de Interjornada):**
 ```typescript

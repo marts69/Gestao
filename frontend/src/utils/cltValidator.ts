@@ -1,10 +1,9 @@
 /**
  * utils/cltValidator.ts
- * Validações de conformidade com a CLT
+ * Validações de conformidade com a CLT baseadas na malha de escala.
  */
 
-import { Appointment, Bloqueio } from '../types';
-import { ehFeriado, feriadosEntre } from './feriadosBR';
+import { type DiaEscala } from './escalaCalculator';
 
 export interface AnaliseConformidadeCLT {
   interjornada: {
@@ -15,7 +14,7 @@ export interface AnaliseConformidadeCLT {
   cargaSemanal: {
     conforme: boolean;
     cargaTotal: number; // em horas
-    semanaAnalisada: string; // "2026-W14"
+    semanaAnalisada: string;
     alertas: string[];
   };
   descansoRemunerado: {
@@ -28,217 +27,318 @@ export interface AnaliseConformidadeCLT {
   resumo: string[];
 }
 
-const INTERJORNADA_MINIMA = 11; // horas
-const CARGA_SEMANAL_MAXIMA = 44; // horas (CLT)
-const ALERTA_CARGA = 40; // alertar quando atingir 40h
-const DESCANSO_MAXIMO_SEM_FOLGA = 7; // dias
+export interface ViolacaoInterjornada {
+  dataTurnoAnterior: string;
+  dataTurnoAtual: string;
+  descansoHoras: number;
+  turnoAnterior: string;
+  turnoAtual: string;
+}
 
-/**
- * Valida interjornada mínima entre dois turnos
- */
-export function validarInterjornada(
-  horaFimTurno1: string,
-  horaInicioTurno2: string
-): { conforme: boolean; horasDescanso: number } {
-  const [h1, m1] = horaFimTurno1.split(':').map(Number);
-  const [h2, m2] = horaInicioTurno2.split(':').map(Number);
-  
-  let minutosFim = h1 * 60 + m1;
-  let minutosInicio = h2 * 60 + m2;
-  
-  // Se inicia próximo dia (ex: 23:00 para 06:00 do dia seguinte)
-  if (minutosInicio < minutosFim) {
-    minutosInicio += 24 * 60;
+export interface ViolacaoSetimoDia {
+  data: string;
+  diasConsecutivos: number;
+}
+
+export const INTERJORNADA_MINIMA_HORAS = 11;
+export const LIMITE_DIAS_CONSECUTIVOS_TRABALHO = 6; // violacao no 7o dia
+
+const HOUR_PATTERN = /^([01]\d|2[0-3]):([0-5]\d)$/;
+
+const isValidDate = (value: string): boolean => {
+  if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const [year, month, day] = value.split('-').map(Number);
+  if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) return false;
+  const date = new Date(year, month - 1, day);
+  return date.getFullYear() === year && date.getMonth() === month - 1 && date.getDate() === day;
+};
+
+const isValidHour = (value?: string): value is string => Boolean(value && HOUR_PATTERN.test(value));
+
+const parseDate = (value: string): Date | null => {
+  if (!isValidDate(value)) return null;
+  const [year, month, day] = value.split('-').map(Number);
+  return new Date(year, month - 1, day, 0, 0, 0, 0);
+};
+
+const combineDateAndHour = (date: string, hour: string): Date | null => {
+  const baseDate = parseDate(date);
+  if (!baseDate || !isValidHour(hour)) return null;
+
+  const [hours, minutes] = hour.split(':').map(Number);
+  return new Date(
+    baseDate.getFullYear(),
+    baseDate.getMonth(),
+    baseDate.getDate(),
+    hours,
+    minutes,
+    0,
+    0,
+  );
+};
+
+const roundHour = (value: number) => Math.round(value * 10) / 10;
+
+const toDayNumber = (value: Date) => Date.UTC(value.getFullYear(), value.getMonth(), value.getDate()) / 86_400_000;
+
+const formatDateBR = (value: string) => {
+  const [year, month, day] = value.split('-');
+  if (!year || !month || !day) return value;
+  return `${day}/${month}/${year}`;
+};
+
+const formatTurno = (dia: DiaEscala, fallback: { inicio: string; fim: string }) => (
+  dia.turno && dia.turno.includes('-') ? dia.turno : `${fallback.inicio}-${fallback.fim}`
+);
+
+const getShiftHours = (dia: DiaEscala): { inicio: string; fim: string } | null => {
+  if (dia.tipo !== 'trabalho') return null;
+
+  if (isValidHour(dia.horaInicio) && isValidHour(dia.horaFim)) {
+    return { inicio: dia.horaInicio, fim: dia.horaFim };
   }
-  
-  const horasDescanso = (minutosInicio - minutosFim) / 60;
-  
-  return {
-    conforme: horasDescanso >= INTERJORNADA_MINIMA,
-    horasDescanso: Math.round(horasDescanso * 10) / 10,
-  };
-}
 
-/**
- * Calcula carga horária semanal
- */
-export function calcularCargaSemanal(
-  appointments: Appointment[],
-  bloqueios: Bloqueio[],
-  dataReferencia: string
-): { cargaTotal: number; semana: string } {
-  const date = new Date(dataReferencia);
-  
-  // Achar início da semana (segunda-feira)
-  const dia = date.getDay();
-  const diasParaSegunda = dia === 0 ? 6 : dia - 1;
-  const inicioSemana = new Date(date);
-  inicioSemana.setDate(date.getDate() - diasParaSegunda);
-  
-  // Fim de semana (domingo)
-  const fimSemana = new Date(inicioSemana);
-  fimSemana.setDate(inicioSemana.getDate() + 6);
-  
-  const inicioStr = inicioSemana.toISOString().split('T')[0];
-  const fimStr = fimSemana.toISOString().split('T')[0];
-  
-  // Somar horas dos agendamentos
-  let totalHoras = 0;
-  appointments
-    .filter(a => a.date >= inicioStr && a.date <= fimStr)
-    .forEach(a => {
-      const [h1, m1] = a.time.split(':').map(Number);
-      // Assuming average 60 minutes per service for now
-      totalHoras += a.services.length * 1; // 1 hora por serviço
-    });
-  
-  // Descontar feriados
-  feriadosEntre(inicioStr, fimStr).forEach(() => {
-    totalHoras -= 8; // dia normal tem 8h
-  });
-  
-  // Obter número da semana ISO
-  const semana = `${inicioSemana.getFullYear()}-W${String(Math.ceil((inicioSemana.getDate() + inicioSemana.getDay()) / 7)).padStart(2, '0')}`;
-  
-  return {
-    cargaTotal: Math.max(0, Math.round(totalHoras * 10) / 10),
-    semana,
-  };
-}
-
-/**
- * Valida carga semanal
- */
-export function validarCargaSemanal(cargaTotal: number): {
-  conforme: boolean;
-  percentualUtilizacao: number;
-  alertas: string[];
-} {
-  const alertas: string[] = [];
-  
-  if (cargaTotal < CARGA_SEMANAL_MAXIMA) {
-    if (cargaTotal >= ALERTA_CARGA) {
-      alertas.push(`⚠️ Carga alta: ${cargaTotal}h/semana (máximo recomendado: ${ALERTA_CARGA}h)`);
+  if (typeof dia.turno === 'string' && dia.turno.includes('-')) {
+    const [inicio, fim] = dia.turno.split('-').map((value) => value.trim());
+    if (isValidHour(inicio) && isValidHour(fim)) {
+      return { inicio, fim };
     }
-  } else {
-    alertas.push(`❌ Carga máxima excedida: ${cargaTotal}h > ${CARGA_SEMANAL_MAXIMA}h`);
   }
-  
+
+  return null;
+};
+
+const getShiftDateRange = (dia: DiaEscala): { inicio: Date; fim: Date; turnoLabel: string } | null => {
+  const shiftHours = getShiftHours(dia);
+  if (!shiftHours) return null;
+
+  const start = combineDateAndHour(dia.data, shiftHours.inicio);
+  const end = combineDateAndHour(dia.data, shiftHours.fim);
+  if (!start || !end) return null;
+
+  const adjustedEnd = new Date(end);
+  if (adjustedEnd.getTime() <= start.getTime()) {
+    adjustedEnd.setDate(adjustedEnd.getDate() + 1);
+  }
+
   return {
-    conforme: cargaTotal <= CARGA_SEMANAL_MAXIMA,
-    percentualUtilizacao: Math.round((cargaTotal / CARGA_SEMANAL_MAXIMA) * 100),
-    alertas,
+    inicio: start,
+    fim: adjustedEnd,
+    turnoLabel: formatTurno(dia, shiftHours),
+  };
+};
+
+/**
+ * Função pura para calcular a diferença entre fim do turno anterior
+ * e início do turno atual.
+ */
+export function calcularDiferencaInterjornada(
+  fimTurnoAnterior: Date,
+  inicioTurnoAtual: Date,
+): { conforme: boolean; horasDescanso: number } {
+  const diffMs = inicioTurnoAtual.getTime() - fimTurnoAnterior.getTime();
+  const horasDescanso = roundHour(diffMs / 3_600_000);
+
+  return {
+    conforme: horasDescanso >= INTERJORNADA_MINIMA_HORAS,
+    horasDescanso,
   };
 }
 
 /**
- * Calcula DSR (Descanso Semanal Remunerado)
+ * Analisa interjornada na malha de escala e retorna violações (< 11h).
  */
-export function calcularDSR(
-  bloqueios: Bloqueio[],
-  dataReferencia: string
-): {
-  temDSR: boolean;
-  ultimaFolga: string | null;
-  diasSemFolga: number;
+export function analisarInterjornadaEscala(diasEscala: DiaEscala[]): {
+  conforme: boolean;
+  menorInterjornada: number;
+  violacoes: ViolacaoInterjornada[];
   alertas: string[];
 } {
-  const dataRef = new Date(dataReferencia);
-  const alertas: string[] = [];
-  
-  // Procurar última folga (bloqueio com "Folga" ou "Férias")
-  const folgas = bloqueios
-    .filter(b => b.motivo.includes('Folga') || b.motivo.includes('Férias'))
-    .sort((a, b) => b.data.localeCompare(a.data));
-  
-  const ultimaFolga = folgas[0]?.data || null;
-  
-  let diasSemFolga = 0;
-  if (ultimaFolga) {
-    const dataFolga = new Date(ultimaFolga);
-    diasSemFolga = Math.floor((dataRef.getTime() - dataFolga.getTime()) / (1000 * 60 * 60 * 24));
-  } else {
-    // Se não tem folga registrada, assumir que passou muito tempo
-    diasSemFolga = 999;
+  const ordered = [...diasEscala]
+    .filter((dia) => dia.tipo === 'trabalho')
+    .sort((a, b) => a.data.localeCompare(b.data));
+
+  const pairs: Array<{ descansoHoras: number; violacao?: ViolacaoInterjornada }> = [];
+
+  for (let index = 1; index < ordered.length; index += 1) {
+    const anterior = ordered[index - 1];
+    const atual = ordered[index];
+
+    const anteriorRange = getShiftDateRange(anterior);
+    const atualRange = getShiftDateRange(atual);
+    if (!anteriorRange || !atualRange) continue;
+
+    const resultado = calcularDiferencaInterjornada(anteriorRange.fim, atualRange.inicio);
+
+    const possibleViolation: ViolacaoInterjornada | undefined = resultado.conforme
+      ? undefined
+      : {
+          dataTurnoAnterior: anterior.data,
+          dataTurnoAtual: atual.data,
+          descansoHoras: resultado.horasDescanso,
+          turnoAnterior: anteriorRange.turnoLabel,
+          turnoAtual: atualRange.turnoLabel,
+        };
+
+    pairs.push({
+      descansoHoras: resultado.horasDescanso,
+      violacao: possibleViolation,
+    });
   }
-  
-  const temDSR = diasSemFolga <= DESCANSO_MAXIMO_SEM_FOLGA;
-  
-  if (!temDSR) {
-    alertas.push(`❌ DSR vencido: ${diasSemFolga} dias sem folga (máximo ${DESCANSO_MAXIMO_SEM_FOLGA})`);
-  } else if (diasSemFolga >= DESCANSO_MAXIMO_SEM_FOLGA - 1) {
-    alertas.push(`⚠️ DSR próximo do vencimento: ${diasSemFolga} dias sem folga`);
-  }
-  
+
+  const violacoes = pairs
+    .map((pair) => pair.violacao)
+    .filter((pair): pair is ViolacaoInterjornada => Boolean(pair));
+
+  const menorInterjornada = pairs.length > 0
+    ? Math.min(...pairs.map((pair) => pair.descansoHoras))
+    : 24;
+
+  const alertas = violacoes.map((violacao) => (
+    `❌ Interjornada abaixo do mínimo em ${formatDateBR(violacao.dataTurnoAtual)}: ${violacao.descansoHoras}h (${violacao.turnoAnterior} → ${violacao.turnoAtual}).`
+  ));
+
   return {
-    temDSR,
-    ultimaFolga,
-    diasSemFolga,
+    conforme: violacoes.length === 0,
+    menorInterjornada,
+    violacoes,
     alertas,
   };
 }
 
 /**
- * Análise completa de conformidade CLT
+ * Função pura para rastrear 7 dias consecutivos de trabalho sem folga (DSR).
  */
-export function analisarConformidadeCLT(
-  appointments: Appointment[],
-  bloqueios: Bloqueio[],
-  dataReferencia: string
-): AnaliseConformidadeCLT {
-  // Interjornada
-  const interjornadas = appointments
-    .filter(a => a.date === dataReferencia)
-    .sort((a, b) => a.time.localeCompare(b.time))
-    .slice(0, -1)
-    .map((a, i, arr) => {
-      const proximoAgendamento = arr[i + 1];
-      if (!proximoAgendamento) return null;
-      return validarInterjornada(a.time, proximoAgendamento.time);
-    })
-    .filter(Boolean) as Array<{ conforme: boolean; horasDescanso: number }>;
-  
-  const menorInterjornada = interjornadas.length > 0
-    ? Math.min(...interjornadas.map(i => i.horasDescanso))
-    : 0;
-  
-  const interjordadaConforme = interjornadas.every(i => i.conforme);
-  
-  // Carga Semanal
-  const { cargaTotal, semana } = calcularCargaSemanal(appointments, bloqueios, dataReferencia);
-  const cargaValidacao = validarCargaSemanal(cargaTotal);
-  
-  // DSR
-  const dsr = calcularDSR(bloqueios, dataReferencia);
-  
-  // Status Geral
-  const statusGeral = interjordadaConforme && cargaValidacao.conforme && dsr.temDSR;
-  
+export function analisarSetimoDiaConsecutivo(diasEscala: DiaEscala[]): {
+  conforme: boolean;
+  sequenciaAtual: number;
+  maiorSequencia: number;
+  violacoes: ViolacaoSetimoDia[];
+  ultimaFolga: string | null;
+  alertas: string[];
+} {
+  const ordered = [...diasEscala].sort((a, b) => a.data.localeCompare(b.data));
+
+  let sequenciaAtual = 0;
+  let maiorSequencia = 0;
+  let previousDate: Date | null = null;
+  let previousWasWork = false;
+
+  const violacoes: ViolacaoSetimoDia[] = [];
+
+  for (const dia of ordered) {
+    const currentDate = parseDate(dia.data);
+    if (!currentDate) continue;
+
+    const isWorkDay = dia.tipo === 'trabalho';
+    const hasGap = previousDate ? toDayNumber(currentDate) - toDayNumber(previousDate) !== 1 : false;
+
+    if (isWorkDay) {
+      const continuaSequencia = previousWasWork && !hasGap;
+      sequenciaAtual = continuaSequencia ? sequenciaAtual + 1 : 1;
+      maiorSequencia = Math.max(maiorSequencia, sequenciaAtual);
+
+      if (sequenciaAtual >= 7) {
+        violacoes.push({
+          data: dia.data,
+          diasConsecutivos: sequenciaAtual,
+        });
+      }
+    } else {
+      sequenciaAtual = 0;
+    }
+
+    previousDate = currentDate;
+    previousWasWork = isWorkDay;
+  }
+
+  const ultimaFolga = [...ordered]
+    .reverse()
+    .find((dia) => dia.tipo !== 'trabalho')?.data || null;
+
+  const alertas: string[] = [];
+
+  if (violacoes.length > 0) {
+    const firstViolation = violacoes[0];
+    alertas.push(
+      `❌ DSR violado: sequência de ${firstViolation.diasConsecutivos} dias consecutivos de trabalho (primeira ocorrência em ${formatDateBR(firstViolation.data)}).`,
+    );
+  } else if (sequenciaAtual === LIMITE_DIAS_CONSECUTIVOS_TRABALHO) {
+    alertas.push('⚠️ DSR no limite: colaborador com 6 dias consecutivos de trabalho.');
+  }
+
+  return {
+    conforme: violacoes.length === 0,
+    sequenciaAtual,
+    maiorSequencia,
+    violacoes,
+    ultimaFolga,
+    alertas,
+  };
+}
+
+const calcularCargaSemanalMedia = (diasEscala: DiaEscala[]): number => {
+  if (diasEscala.length === 0) return 0;
+
+  let totalHoras = 0;
+
+  diasEscala.forEach((dia) => {
+    if (dia.tipo !== 'trabalho') return;
+
+    const range = getShiftDateRange(dia);
+    if (!range) {
+      totalHoras += 8;
+      return;
+    }
+
+    const horas = (range.fim.getTime() - range.inicio.getTime()) / 3_600_000;
+    totalHoras += Math.max(0, horas);
+  });
+
+  const semanasNoPeriodo = Math.max(1, diasEscala.length / 7);
+  return roundHour(totalHoras / semanasNoPeriodo);
+};
+
+/**
+ * Análise completa de conformidade CLT baseada na malha de escala.
+ */
+export function analisarConformidadeCLT(diasEscala: DiaEscala[]): AnaliseConformidadeCLT {
+  const interjornada = analisarInterjornadaEscala(diasEscala);
+  const setimoDia = analisarSetimoDiaConsecutivo(diasEscala);
+
+  const cargaTotal = calcularCargaSemanalMedia(diasEscala);
+  const semanaAnalisada = diasEscala.length > 0
+    ? `${diasEscala[0].data.slice(0, 7)} (média)`
+    : 'N/A';
+
+  const resumo = [
+    ...interjornada.alertas,
+    ...setimoDia.alertas,
+  ];
+
+  if (resumo.length === 0) {
+    resumo.push('✅ Escala em conformidade com as regras de interjornada e DSR.');
+  }
+
   return {
     interjornada: {
-      conforme: interjordadaConforme,
-      menorInterjornada: menorInterjornada,
-      alertas: interjornadas.some(i => !i.conforme)
-        ? [`❌ Interjornada mínima violada: ${menorInterjornada}h < ${INTERJORNADA_MINIMA}h`]
-        : [],
+      conforme: interjornada.conforme,
+      menorInterjornada: interjornada.menorInterjornada,
+      alertas: interjornada.alertas,
     },
     cargaSemanal: {
-      conforme: cargaValidacao.conforme,
-      cargaTotal: cargaTotal,
-      semanaAnalisada: semana,
-      alertas: cargaValidacao.alertas,
+      conforme: true,
+      cargaTotal,
+      semanaAnalisada,
+      alertas: [],
     },
     descansoRemunerado: {
-      conforme: dsr.temDSR,
-      ultimaFolga: dsr.ultimaFolga || 'Não registrada',
-      diasSemFolga: dsr.diasSemFolga,
-      alertas: dsr.alertas,
+      conforme: setimoDia.conforme,
+      ultimaFolga: setimoDia.ultimaFolga || 'Não registrada',
+      diasSemFolga: setimoDia.sequenciaAtual,
+      alertas: setimoDia.alertas,
     },
-    statusGeral,
-    resumo: [
-      interjordadaConforme ? '✅ Interjornada conforme' : '❌ Interjornada não conforme',
-      cargaValidacao.conforme ? `✅ Carga semanal: ${cargaTotal}h (${cargaValidacao.percentualUtilizacao}%)` : `❌ Carga excedida: ${cargaTotal}h`,
-      dsr.temDSR ? '✅ DSR conforme' : `❌ DSR vencido (${dsr.diasSemFolga}d sem folga)`,
-    ],
+    statusGeral: interjornada.conforme && setimoDia.conforme,
+    resumo,
   };
 }

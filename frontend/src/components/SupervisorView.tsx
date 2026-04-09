@@ -946,21 +946,10 @@ export function SupervisorView({ employees, appointments, services, clients, sca
   }, [isSavingPlanning, onSaveScaleOverride, planningOverrides, suggestedPlanningKeys]);
 
   const cltRealtimeAlerts = useMemo(() => {
-    const referenceDate = getLocalTodayString();
-
-    const appsByEmp = new Map<string, Appointment[]>();
-    for (const app of appointments) {
-      if (!appsByEmp.has(app.assignedEmployeeId)) appsByEmp.set(app.assignedEmployeeId, []);
-      appsByEmp.get(app.assignedEmployeeId)!.push(app);
-    }
-
     return activeNonAdminEmployees
       .map((emp) => {
-        const analise = analisarConformidadeCLT(
-          appsByEmp.get(emp.id) || [],
-          emp.bloqueios || [],
-          referenceDate,
-        );
+        const malha = buildScaleForEmployee(emp.id);
+        const analise = analisarConformidadeCLT(malha);
 
         return {
           id: emp.id,
@@ -970,7 +959,7 @@ export function SupervisorView({ employees, appointments, services, clients, sca
         };
       })
       .filter((item) => !item.conforme);
-  }, [activeNonAdminEmployees, appointments]);
+  }, [activeNonAdminEmployees, buildScaleForEmployee]);
 
   const pendingTurnoSwapRequests = useMemo(
     () => turnoSwapRequests.filter((request) => request.status === 'pendente'),

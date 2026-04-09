@@ -7,6 +7,7 @@ import { useAuth } from './AuthContext';
 import { LoginView } from './components/LoginView';
 import io from 'socket.io-client';
 import { getSocketUrl } from './config/api';
+import { aplicarFolgasDomingoNoMes, gerarEscala, type DiaEscala } from './utils/escalaCalculator';
 import { analisarConformidadeCLT } from './utils/cltValidator';
 import { AuditorModal } from './components/AuditorModal';
 import { Employee, Appointment, Service, Client, TurnoSwapRequest, TurnoSwapStatus, ServiceEligibilityMode } from './types'; // Tipos mais fortes
@@ -322,29 +323,87 @@ export default function App() {
   // Calcula alertas CLT globais para o sino no header
   const cltRealtimeAlerts = useMemo(() => {
     if (currentUser?.role !== 'supervisor') return [];
-    const referenceDate = getLocalTodayString();
-    
-    // Otimização O(N): Mapeia agendamentos por funcionário para validação CLT instantânea
-    const appsByEmp = new Map<string, Appointment[]>();
-    for (const app of appointments) {
-      if (!appsByEmp.has(app.assignedEmployeeId)) appsByEmp.set(app.assignedEmployeeId, []);
-      appsByEmp.get(app.assignedEmployeeId)!.push(app);
-    }
 
-    return staff.map(emp => {
-      const analise = analisarConformidadeCLT(
-        appsByEmp.get(emp.id) || [],
-        emp.bloqueios || [],
-        referenceDate
-      );
+    const monthRef = getLocalTodayString().slice(0, 7);
+    const [yearRaw, monthRaw] = monthRef.split('-').map(Number);
+    const year = Number.isFinite(yearRaw) ? yearRaw : new Date().getFullYear();
+    const month = Number.isFinite(monthRaw) ? monthRaw : new Date().getMonth() + 1;
+    const firstDay = `${year}-${String(month).padStart(2, '0')}-01`;
+    const daysInMonth = new Date(year, month, 0).getDate();
+
+    const overridesMap = new Map<string, { tipo: DiaEscala['tipo']; turno?: string; descricao?: string }>();
+    scaleOverrides.forEach((override) => {
+      overridesMap.set(`${override.colaboradorId}:${override.data}`, {
+        tipo: override.tipo,
+        turno: override.turno,
+        descricao: override.descricao,
+      });
+    });
+
+    const splitTurno = (turno?: string) => {
+      if (!turno || !turno.includes('-')) {
+        return { horaInicio: undefined as string | undefined, horaFim: undefined as string | undefined };
+      }
+      const [horaInicio, horaFim] = turno.split('-');
       return {
-        id: emp.id,
-        nome: emp.name,
-        conforme: analise.statusGeral,
-        resumo: analise.resumo,
+        horaInicio: horaInicio || undefined,
+        horaFim: horaFim || undefined,
       };
-    }).filter(item => !item.conforme);
-  }, [staff, appointments, currentUser]);
+    };
+
+    const applyOverrideToDia = (employeeId: string, dia: DiaEscala): DiaEscala => {
+      const override = overridesMap.get(`${employeeId}:${dia.data}`);
+      if (!override) return dia;
+
+      if (override.tipo !== 'trabalho') {
+        return {
+          ...dia,
+          tipo: override.tipo,
+          turno: undefined,
+          horaInicio: undefined,
+          horaFim: undefined,
+          descricao: override.descricao ?? dia.descricao,
+        };
+      }
+
+      const { horaInicio, horaFim } = splitTurno(override.turno);
+      return {
+        ...dia,
+        tipo: 'trabalho',
+        turno: override.turno || dia.turno,
+        horaInicio: horaInicio || dia.horaInicio,
+        horaFim: horaFim || dia.horaFim,
+        descricao: override.descricao ?? dia.descricao,
+      };
+    };
+
+    return staff
+      .map((emp) => {
+        const diasBase = gerarEscala(
+          {
+            tipo: emp.tipoEscala || '6x1',
+            dataInicio: firstDay,
+          },
+          daysInMonth,
+        );
+
+        const diasComDomingo = aplicarFolgasDomingoNoMes(
+          diasBase,
+          emp.folgasDomingoNoMes ?? 2,
+        );
+
+        const malha = diasComDomingo.map((dia) => applyOverrideToDia(emp.id, dia));
+        const analise = analisarConformidadeCLT(malha);
+
+        return {
+          id: emp.id,
+          nome: emp.name,
+          conforme: analise.statusGeral,
+          resumo: analise.resumo,
+        };
+      })
+      .filter((item) => !item.conforme);
+  }, [staff, scaleOverrides, currentUser]);
 
   // 2. SUBSTITUIÇÃO DAS FUNÇÕES DE CALLBACK PELAS MUTAÇÕES DO REACT QUERY
   // A lógica de 'fetch', 'try/catch', e 'setEstado' é abstraída para dentro dos hooks.
