@@ -9,6 +9,37 @@ Objetivo: manter uma fonte única de pendências abertas, em formato pronto para
 - Responsável: papel dono da execução (podendo ter co-responsável).
 - Status: todos os itens abaixo estão ativos e em aberto.
 
+## Planejamento de Sprint (Execução)
+
+### Sprint 01 - Operacional (P0)
+
+Período sugerido: 10/04/2026 a 16/04/2026
+
+| Item | Objetivo | Responsável | Estimativa |
+|------|----------|-------------|------------|
+| BLG-001 | Regra final de exibição no agendamento para folga | Produto/Supervisão + Frontend | 3h |
+| BLG-002 | Bloqueio automático/manual para colaborador em folga | Backend + Frontend | 8h |
+| BLG-003 | Feriados automáticos integrados na malha | Backend + Frontend | 6h |
+
+Total estimado Sprint 01: 17h
+
+### Sprint 02 - Produto (P1)
+
+Período sugerido: 17/04/2026 a 24/04/2026
+
+| Item | Objetivo | Responsável | Estimativa |
+|------|----------|-------------|------------|
+| BLG-004 | Filtros avançados da escala | Frontend | 10h |
+| BLG-005 | Férias automáticas | Backend + Frontend | 6h |
+| BLG-006 | Relatórios e exportação (PDF/CSV) | Frontend + Backend | 14h |
+| BLG-007 | Padronização documental frontend/backend | Documentação | 4h |
+
+Total estimado Sprint 02: 34h
+
+### Reserva Evolutiva (P2)
+
+Esforço agregado estimado para roadmap P2 (BLG-008 a BLG-013): 70h a 110h.
+
 ## P0 - Sprint Atual (Operacional)
 
 - [ ] BLG-001 - Definir regra final de exibição no agendamento para colaboradores de folga.
