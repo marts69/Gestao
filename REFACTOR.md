@@ -929,6 +929,14 @@ Tempo de Manutenção           ⭐⭐⭐      ⭐⭐⭐⭐         ~+40%
 3. **Depois**: Faça FASE 2 quando FASE 1 estiver 100% ok
 4. **Opcional**: FASE 3 se houver tempo
 
+### 🔮 ROADMAP FUTURO (Próxima Grande Atualização)
+
+**FASE 8: Experiência do Cliente Final (Front-stage)**
+Com a estabilização completa da operação (Agenda, Escalas, RH e Serviços Premium), o próximo passo é encantar o cliente final:
+
+- [ ] **Ficha de Anamnese Digital (Self-Service via Celular):** Página mobile-friendly ativada pelo QR Code da TV. O cliente digita o telefone e preenche sua própria ficha clínica (alergias, pressões, óleos) direto no sofá da recepção. Sincronização em tempo real com a tela do Supervisor.
+- [ ] **Sistema de Fidelidade "Invisível" (Status VIP):** Motor de regras baseado no histórico de *Concluídos* e *Receita LTV*. Classifica os clientes em Tiers (ex: Silver, Gold, Platinum) silenciosamente e alerta a recepcionista para oferecer mimos (upgrade, chás especiais, espumante) em marcos comemorativos (ex: 10ª visita).
+
 ### Atualizacao 09/04/2026 (estabilizacao e preparo de release 1.0.5-alpha)
 - Correcao de JSX em `SupervisorServicosTab.tsx` para remover bloco indevido e restaurar fechamento correto da arvore de renderizacao.
 - Correcao de renderizacao condicional em `SupervisorEquipeTab.tsx` (ramo ternario quebrado).
