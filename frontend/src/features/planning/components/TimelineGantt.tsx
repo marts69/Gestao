@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Employee, Appointment } from '../../../types';
-import { gerarEscala, DiaEscala } from '../../../utils/escalaCalculator';
+import { gerarEscalaComRegras, DiaEscala } from '../../../utils/escalaCalculator';
 
 interface TimelineGanttProps {
   employees: Employee[];
@@ -85,12 +85,13 @@ export function TimelineGantt({ employees, appointments, month, selectedMonth, o
     employees.forEach((emp) => {
       const firstDay = `${year}-${String(monthNum).padStart(2, '0')}-01`;
       const daysInMonth = new Date(year, monthNum, 0).getDate();
-      const escala = gerarEscala(
+      const escala = gerarEscalaComRegras(
         {
           tipo: emp.tipoEscala || '6x1',
           dataInicio: firstDay,
         },
         daysInMonth,
+        { folgasDomingoNoMes: emp.folgasDomingoNoMes ?? 2 },
       );
       const dayMap = new Map<number, DiaEscala>();
 
@@ -223,6 +224,8 @@ export function TimelineGantt({ employees, appointments, month, selectedMonth, o
 
   const getCellIconAndLabel = (dia?: DiaEscala) => {
     if (!dia) return null;
+    const isHoliday = Boolean(dia.feriadoNome || dia.descricao?.toLowerCase().includes('feriado'));
+    if (isHoliday) return { label: 'FER', icon: 'celebration' };
     if (dia.tipo === 'folga') return { label: 'FOLGA', icon: 'event_busy' };
     if (dia.tipo === 'fds') return { label: 'FDS', icon: 'weekend' };
     if (dia.turno) {
@@ -636,7 +639,7 @@ export function TimelineGantt({ employees, appointments, month, selectedMonth, o
 
       {isEditable && quickMenu && (
         <div
-          className="fixed z-50 rounded-xl border border-outline-variant/25 bg-surface-container-high shadow-2xl p-2 flex flex-col gap-2 min-w-[160px]"
+          className="fixed z-50 rounded-xl border border-outline-variant/25 bg-surface-container-high shadow-2xl p-2 flex flex-col gap-2 min-w-40"
           style={{ top: quickMenu.y + 8, left: quickMenu.x - 40 }}
         >
           <div className="border-b border-outline-variant/20 pb-2 mb-1 px-1">

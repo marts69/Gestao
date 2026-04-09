@@ -2,7 +2,7 @@ import React, { useMemo } from 'react';
 import { Appointment, Employee } from '../../../types';
 import { getLocalTodayString } from '../../appointments/utils/appointmentCore';
 import { analisarConformidadeCLT } from '../../../utils/cltValidator';
-import { aplicarFolgasDomingoNoMes, calcularHorasEscala, gerarEscala } from '../../../utils/escalaCalculator';
+import { calcularHorasEscala, gerarEscalaComRegras } from '../../../utils/escalaCalculator';
 
 interface DashboardEscalasProps {
   employees: Employee[];
@@ -15,17 +15,13 @@ export function DashboardEscalas({ employees, appointments }: DashboardEscalasPr
     const referenceDate = getLocalTodayString();
 
     const rows = activeEmployees.map((emp) => {
-      const escalaBase = gerarEscala(
+      const escala = gerarEscalaComRegras(
         {
           tipo: emp.tipoEscala || '6x1',
           dataInicio: referenceDate,
         },
         28,
-      );
-
-      const escala = aplicarFolgasDomingoNoMes(
-        escalaBase,
-        emp.folgasDomingoNoMes ?? 2,
+        { folgasDomingoNoMes: emp.folgasDomingoNoMes ?? 2 },
       );
 
       const horas = calcularHorasEscala(escala).horasTrabalhadas;

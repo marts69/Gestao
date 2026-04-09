@@ -3,6 +3,8 @@
  * Lógica de cálculo de escalas (6x1, 5x2, 12x36, rotativo)
  */
 
+import { ehFeriado, obterNomeFeriado } from './feriadosBR';
+
 export type TipoEscala = '6x1' | '5x1' | '5x2' | '12x36' | 'rotativo' | 'personalizado';
 
 export interface DiaEscala {
@@ -13,6 +15,7 @@ export interface DiaEscala {
   horaFim?: string;
   descricao?: string;
   folgaDominicalConfigurada?: boolean;
+  feriadoNome?: string;
 }
 
 export interface ConfiguracaoEscala {
@@ -238,6 +241,61 @@ export function gerarEscala(
   }
 }
 
+const montarDescricaoFeriado = (descricaoAtual: string | undefined, nomeFeriado: string) => {
+  const descricaoFeriado = `Feriado: ${nomeFeriado}`;
+  if (!descricaoAtual) return descricaoFeriado;
+  if (descricaoAtual.toLowerCase().includes('feriado')) return descricaoAtual;
+  return `${descricaoAtual} • ${descricaoFeriado}`;
+};
+
+/**
+ * Aplica feriados nacionais automaticamente na malha de escala.
+ * Regra padrão: se o dia estava como trabalho, vira indisponível (tipo fds)
+ * mantendo identificação de feriado para exibição na UI.
+ */
+export function aplicarFeriadosNaEscala(dias: DiaEscala[]): DiaEscala[] {
+  return dias.map((dia) => {
+    if (!ehFeriado(dia.data)) return dia;
+
+    const nomeFeriado = obterNomeFeriado(dia.data) || 'Feriado nacional';
+    const descricao = montarDescricaoFeriado(dia.descricao, nomeFeriado);
+
+    if (dia.tipo === 'trabalho') {
+      return {
+        ...dia,
+        tipo: 'fds',
+        turno: undefined,
+        horaInicio: undefined,
+        horaFim: undefined,
+        descricao,
+        feriadoNome: nomeFeriado,
+      };
+    }
+
+    return {
+      ...dia,
+      descricao,
+      feriadoNome: nomeFeriado,
+    };
+  });
+}
+
+/**
+ * Gera malha com regras automáticas do domínio:
+ * 1) base por tipo de escala
+ * 2) feriados nacionais
+ * 3) folgas dominicais configuradas
+ */
+export function gerarEscalaComRegras(
+  config: ConfiguracaoEscala,
+  numeroDias: number,
+  options?: { folgasDomingoNoMes?: number },
+): DiaEscala[] {
+  const diasBase = gerarEscala(config, numeroDias);
+  const diasComFeriado = aplicarFeriadosNaEscala(diasBase);
+  return aplicarFolgasDomingoNoMes(diasComFeriado, options?.folgasDomingoNoMes ?? 0);
+}
+
 /**
  * Garante quantidade minima de domingos de folga no mes.
  * Se o dia ja for folga/fds, apenas contabiliza; se nao for, converte para folga.
@@ -258,7 +316,7 @@ export function aplicarFolgasDomingoNoMes(dias: DiaEscala[], folgasDomingoNoMes:
         return {
           ...dia,
           folgaDominicalConfigurada: true,
-          descricao: dia.descricao || 'Folga dominical',
+          descricao: dia.descricao || (dia.feriadoNome ? `Feriado: ${dia.feriadoNome}` : 'Folga dominical'),
         };
       }
 
@@ -268,7 +326,7 @@ export function aplicarFolgasDomingoNoMes(dias: DiaEscala[], folgasDomingoNoMes:
         turno: undefined,
         horaInicio: undefined,
         horaFim: undefined,
-        descricao: 'Folga dominical',
+        descricao: dia.feriadoNome ? `Feriado: ${dia.feriadoNome}` : 'Folga dominical',
         folgaDominicalConfigurada: true,
       };
     }

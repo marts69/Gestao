@@ -1,8 +1,11 @@
-# 📅 Sistema de Gestão de Escalas - Requisitos Implementados
+# 📅 Sistema de Gestão de Escalas - Status Auditado
+
+Atualizado em: 09/04/2026
+Fonte única de pendências ativas: BACKLOG_ATIVO.md
 
 ## 1. Cadastro Completo de Colaboradores ✅
 
-### Campos a Adicionar ao Employee:
+### Campos-alvo para Employee:
 ```typescript
 - cargo: string
 - telefone: string
@@ -14,7 +17,11 @@
 - disponibilidadeFds: boolean
 ```
 
-### Interface de Tipos de Escala:
+Estado atual auditado:
+- Implementado no modelo operacional: `cargo`, `tipoEscala`, `cargaHorariaSemanal`, `habilidades`, `folgasDomingoNoMes`, `bloqueios`.
+- Ainda não incorporado no `Employee` atual: `telefone`, `cpf`, `turnosPrefere`, `disponibilidadeFds`, `cargaHorariaDisponivel` (o campo ativo é `cargaHorariaSemanal`).
+
+### Modelo proposto de turno (não materializado como tipo dedicado no código atual):
 ```typescript
 interface TurnoEscala {
   id: string;
@@ -31,19 +38,19 @@ interface TurnoEscala {
 
 ## 2. Visualização de Calendário/Dashboard ✅
 
-### Componentes Necessários:
-1. **CalendarioMensal** - Visualizar mês inteiro com cores por tipo de escala
-2. **VisualizacaoTurno** - Detalhe de cada dia/turno
-3. **DashboardGestao** - Overview de sobrecarga e gargalos
+### Componentes em uso no frontend atual:
+1. **CalendarioEscala / DraggableCalendarioEscala** - grade mensal com interação e edição
+2. **TimelineGantt** - visão temporal operacional da equipe
+3. **DashboardEscalas** - métricas de saúde e conformidade de escala
 
 ### Tipos de Visualização:
-- Semanal (7 dias) - pendente no BACKLOG_ATIVO.md
-- Mensal (calendário) - pendente no BACKLOG_ATIVO.md
-- Por colaborador - pendente no BACKLOG_ATIVO.md
-- Por turno - pendente no BACKLOG_ATIVO.md
-- Por carga horária - pendente no BACKLOG_ATIVO.md
+- Semanal (7 dias)
+- Mensal (calendário)
+- Por colaborador
+- Por turno
+- Por carga horária
 
-**Status:** 🟡 Parcialmente implementado (calendário/timeline ativos; filtros avançados seguem em backlog)
+**Status:** 🟡 Parcialmente implementado (calendário/timeline ativos; filtros avançados seguem em backlog - BLG-004)
 
 ---
 
@@ -85,10 +92,10 @@ Semana 4: Folga
 ## 4. Controle de Folgas e Férias ✅
 
 ### Funcionalidades:
-- [x] Bloqueios já funcionam (folgas, férias)
-- Feriados automáticos (BR) - pendente no BACKLOG_ATIVO.md
-- [x] Cálculo de DSR (Descanso Semanal Remunerado)
-- Férias automáticas em período permitido - pendente no BACKLOG_ATIVO.md
+- Bloqueios operacionais já funcionam (folgas e indisponibilidades)
+- Feriados automáticos (BR): integrados na malha com precedência de override manual
+- Cálculo de DSR (Descanso Semanal Remunerado): implementado
+- Férias automáticas em período permitido: pendente (BLG-005)
 
 ### Feriados Nacionais (2026):
 ```
@@ -108,7 +115,7 @@ Semana 4: Folga
 25/12 - Natal
 ```
 
-**Status:** 🟡 Parcialmente implementado (utilitário de feriados criado; integração automática na malha ainda pendente)
+**Status:** 🟡 Parcialmente implementado (feriados automáticos integrados; férias automáticas permanecem pendentes - BLG-005)
 
 ---
 
@@ -134,7 +141,7 @@ interface TrocaTurno {
 3. Supervisor aprova/recusa
 4. Notificação para ambos
 
-**Status:** ✅ Implementado (solicitação + aprovação/rejeição)
+**Status:** 🟡 Parcialmente implementado (solicitação + aprovação/rejeição operacionais; validações avançadas de disponibilidade seguem como evolução)
 
 ---
 
@@ -176,7 +183,7 @@ interface ConfirmidadeCLT {
 }
 ```
 
-**Status:** ✅ Implementado (interjornada, DSR e integração com sino global)
+**Status:** 🟡 Parcialmente implementado (interjornada, DSR e integração com sino global ativos; bloqueio automático por carga semanal CLT ainda em evolução)
 
 ---
 
@@ -214,60 +221,55 @@ interface ConfirmidadeCLT {
 ## 📋 Plano de Implementação por Prioridade
 
 ### FASE 1 (Crítico)
-- [x] Atualizar tipos em `types.ts`
-- [x] Expandir formulário de colaborador em `SupervisorEquipeTab`
-- [x] Criar validador CLT básico (`utils/cltValidator.ts`)
-- [x] Mostrar alertas de conformidade na UI
+- Entregue: atualização de tipos operacionais, expansão do formulário principal, validador CLT base e alertas de conformidade na UI.
+- Gap remanescente: campos avançados de colaborador não incorporados integralmente ao modelo atual.
 
 ### FASE 2 (Alto)
-- [x] Componente `CalendarioMensal` com cores por tipo de escala
-- [x] Modal de "Solicitar Troca"
-- Função de Feriados Automáticos (`utils/feriadosBR.ts`) - pendente no BACKLOG_ATIVO.md
-- [x] Dashboard de Gestão com métricas
+- Entregue: calendário/timeline operacionais, modal de solicitação de troca e dashboard de métricas.
+- Entregue: integração automática de feriados na malha com sinalização na UI.
 
 ### FASE 3 (Médio)
-- [x] Lógica de rotação automática (12x36, rotativo)
-- Relatórios detalhados (sobrecarga, gargalos) - pendente no BACKLOG_ATIVO.md
-- [x] Cálculo automático de DSR
-- Exportar relatórios (PDF/CSV) - pendente no BACKLOG_ATIVO.md
+- Entregue: rotação automática (incluindo 12x36/rotativo) e cálculo de DSR.
+- Em aberto: relatórios detalhados e exportação PDF/CSV (BLG-006).
 
 ### FASE 4 (Aprimoramentos)
-- Integração de calendário externo (Google Calendar) - pendente no BACKLOG_ATIVO.md
-- Notificações por email - pendente no BACKLOG_ATIVO.md
-- App mobile para visualizar escala - pendente no BACKLOG_ATIVO.md
-- Histórico e auditoria de mudanças - pendente no BACKLOG_ATIVO.md
+- Em backlog evolutivo: integração com calendário externo, notificações por e-mail, visão mobile e trilha de auditoria (BLG-008 a BLG-011).
 
 ---
 
-## 🔗 Arquivos a Criar/Modificar
+## 🔗 Arquivos Reais no Estado Atual
 
 ```
 src/
-├── types.ts                          [MODIFICAR] - Adicionar novos tipos
+├── types.ts                          [ATIVO] - Tipos centrais de domínio
 ├── utils/
-│   ├── cltValidator.ts              [NOVO] - Validações CLT
-│   ├── feriadosBR.ts                [NOVO] - Feriados brasileiros
-│   └── escalaCalculator.ts          [NOVO] - Lógica de escalas
+│   ├── cltValidator.ts               [ATIVO] - Conformidade CLT
+│   ├── feriadosBR.ts                 [ATIVO] - Utilitários de feriado
+│   └── escalaCalculator.ts           [ATIVO] - Geração e análise de escala
 ├── components/
-│   ├── CalendarioMensal.tsx         [NOVO] - Calendário visual
-│   ├── SolicitarTroca.tsx           [NOVO] - Modal de troca
-│   ├── DashboardGestao.tsx          [NOVO] - Dashboard de métricas
-│   ├── RelatorioSobrecarga.tsx      [NOVO] - Relatório de sobrecarga
-│   ├── SupervisorEquipeTab.tsx      [MODIFICAR] - Expandir cadastro
-│   └── SupervisorView.tsx           [MODIFICAR] - Adicionar aba de escalas
-└── hooks/
-    └── useEscalaManager.ts          [NOVO] - Hook para gestão de escalas
+│   ├── SolicitarTroca.tsx            [ATIVO] - Solicitação de troca
+│   ├── SupervisorView.tsx            [ATIVO] - Orquestração de tabs/fluxos
+│   └── Layout.tsx                    [ATIVO] - Sino global de alertas CLT
+└── features/
+  ├── planning/components/
+  │   ├── CalendarioEscala.tsx      [ATIVO]
+  │   ├── DraggableCalendarioEscala.tsx [ATIVO]
+  │   ├── TimelineGantt.tsx         [ATIVO]
+  │   └── DashboardEscalas.tsx      [ATIVO]
+  └── team/components/
+    └── SupervisorEquipeTab.tsx   [ATIVO]
 ```
 
 ---
 
-## 🎯 Próximos Passos
+## 🎯 Próximos Passos (Executivos)
 
-1. **Confirmação com usuário:** Validar prioridades e escopo
-2. **Começar pela FASE 1:** Tipos + Validador CLT
-3. **Implementar incrementalmente** com testes em cada fase
+1. Fechar BLG-004 (filtros avançados da escala).
+2. Fechar BLG-006 (relatórios e exportação PDF/CSV).
+3. Fechar BLG-005 (férias automáticas em período permitido).
+4. Manter novos pendentes apenas no BACKLOG_ATIVO.md.
 
 ---
 
-**Data:** 03/04/2026
-**Status Geral:** 🟠 Planejado - Aguardando Implementação
+**Data:** 09/04/2026
+**Status Geral:** 🟡 Parcialmente implementado com pendências consolidadas no BACKLOG_ATIVO.md

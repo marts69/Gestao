@@ -396,6 +396,37 @@ export function createRouter(io: Server) {
     return null;
   };
 
+  type Feriado = {
+    data: string;
+    nome: string;
+    tipo: 'nacional' | 'estadual' | 'municipal';
+    uf?: string;
+  };
+
+  const FERIADOS_NACIONAIS_2026: Feriado[] = [
+    { data: '2026-01-01', nome: 'Ano Novo', tipo: 'nacional' },
+    { data: '2026-04-03', nome: 'Sexta-feira Santa', tipo: 'nacional' },
+    { data: '2026-04-21', nome: 'Tiradentes', tipo: 'nacional' },
+    { data: '2026-05-01', nome: 'Dia do Trabalho', tipo: 'nacional' },
+    { data: '2026-09-07', nome: 'Independência do Brasil', tipo: 'nacional' },
+    { data: '2026-10-12', nome: 'Nossa Senhora Aparecida', tipo: 'nacional' },
+    { data: '2026-11-02', nome: 'Finados', tipo: 'nacional' },
+    { data: '2026-11-15', nome: 'Proclamação da República', tipo: 'nacional' },
+    { data: '2026-11-20', nome: 'Consciência Negra', tipo: 'nacional' },
+    { data: '2026-12-25', nome: 'Natal', tipo: 'nacional' },
+  ];
+
+  const FERIADOS_MOVEIS_2026: Feriado[] = [
+    { data: '2026-02-23', nome: 'Carnaval', tipo: 'nacional' },
+    { data: '2026-05-30', nome: 'Corpus Christi', tipo: 'nacional' },
+    { data: '2026-10-29', nome: 'Dia do Servidor Público', tipo: 'nacional' },
+  ];
+
+  const obterFeriadosNacionais = (ano: number): Feriado[] => {
+    if (ano === 2026) return [...FERIADOS_NACIONAIS_2026, ...FERIADOS_MOVEIS_2026];
+    return FERIADOS_NACIONAIS_2026.filter((feriado) => feriado.data.startsWith(String(ano)));
+  };
+
   // 0. Rota de LOGIN (Pública - Sem bloqueio)
   router.post('/login', async (req, res) => {
     try {
@@ -433,6 +464,29 @@ export function createRouter(io: Server) {
       console.error('[LOGIN] 🚨 Erro interno crítico:', error);
       res.status(500).json({ erro: 'Erro interno no servidor' });
     }
+  });
+
+  // 0.1 Rota para LISTAR feriados (ano/mês)
+  router.get('/feriados', verificarToken, async (req, res) => {
+    const anoQuery = Number(req.query.ano);
+    const mesQuery = Number(req.query.mes);
+
+    const ano = Number.isFinite(anoQuery) && anoQuery >= 2000
+      ? anoQuery
+      : new Date().getFullYear();
+
+    if (Number.isFinite(mesQuery) && (mesQuery < 1 || mesQuery > 12)) {
+      return res.status(400).json({ erro: 'Parâmetro mês inválido. Use valores entre 1 e 12.' });
+    }
+
+    let feriados = obterFeriadosNacionais(ano);
+
+    if (Number.isFinite(mesQuery)) {
+      const mesNormalizado = String(mesQuery).padStart(2, '0');
+      feriados = feriados.filter((feriado) => feriado.data.startsWith(`${ano}-${mesNormalizado}`));
+    }
+
+    return res.json(feriados);
   });
 
   // 1. Rota para LISTAR todos os colaboradores

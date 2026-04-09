@@ -131,6 +131,7 @@ export function CalendarioEscala({ escalas, year, month, selectedMonth, onMonthC
           const isTrabalho = escala?.tipo === 'trabalho';
           const isFolga = escala?.tipo === 'folga';
           const isFds = escala?.tipo === 'fds';
+          const isHoliday = Boolean(escala?.feriadoNome || escala?.descricao?.toLowerCase().includes('feriado'));
           const hasCltAlert = cltViolationDays.has(day);
           const isFolgaDominicalConfigurada = Boolean(escala?.folgaDominicalConfigurada);
           const isToday = day === today;
@@ -143,7 +144,7 @@ export function CalendarioEscala({ escalas, year, month, selectedMonth, onMonthC
           if (isFolga || isFds) {
             bgClass = 'bg-surface-variant/40 border-outline-variant/30 shadow-inner bg-[repeating-linear-gradient(-45deg,transparent,transparent_5px,rgba(0,0,0,0.03)_5px,rgba(0,0,0,0.03)_10px)] dark:bg-[repeating-linear-gradient(-45deg,transparent,transparent_5px,rgba(255,255,255,0.03)_5px,rgba(255,255,255,0.03)_10px)]';
             textClass = 'text-on-surface-variant';
-            icon = isFolga ? 'event_busy' : 'weekend';
+            icon = isHoliday ? 'celebration' : (isFolga ? 'event_busy' : 'weekend');
           } else if (isTrabalho) {
             textClass = 'text-white';
             const t = escala?.turno || '';
@@ -176,18 +177,22 @@ export function CalendarioEscala({ escalas, year, month, selectedMonth, onMonthC
           const interactiveClass = isInteractive ? 'cursor-pointer hover:shadow-md hover:scale-105 transition-all' : '';
 
           const primaryLabel = isFolga
-            ? 'FOLGA'
+            ? (isHoliday ? 'FER' : 'FOLGA')
             : isFds
-              ? 'FDS'
-              : escala?.turno
-                ? escala.turno.split('-')[0]
-                : 'TRAB';
+              ? (isHoliday ? 'FER' : 'FDS')
+              : isHoliday
+                ? 'FER'
+                : escala?.turno
+                  ? escala.turno.split('-')[0]
+                  : 'TRAB';
 
-          const secondaryLabel = isTrabalho && escala?.turno?.includes('-')
-            ? escala.turno.split('-')[1]
-            : isFds
-              ? 'Fim de semana'
-              : '';
+          const secondaryLabel = isHoliday
+            ? (escala?.feriadoNome || 'Feriado')
+            : isTrabalho && escala?.turno?.includes('-')
+              ? escala.turno.split('-')[1]
+              : isFds
+                ? 'Fim de semana'
+                : '';
 
           return (
             <div key={day} className="relative group h-16 sm:h-20">
@@ -230,7 +235,7 @@ export function CalendarioEscala({ escalas, year, month, selectedMonth, onMonthC
                       {String(day).padStart(2, '0')}/{String(month).padStart(2, '0')}/{year}
                     </div>
                     <div className="text-xs text-on-surface mb-1 mt-1">
-                      <span className="font-bold">Status:</span> {isFolga ? 'Folga' : isFds ? 'Fim de Semana' : 'Trabalho'}
+                      <span className="font-bold">Status:</span> {isHoliday ? 'Feriado' : isFolga ? 'Folga' : isFds ? 'Fim de Semana' : 'Trabalho'}
                     </div>
                     {isTrabalho && escala.turno && (
                       <div className="text-xs text-on-surface mb-1">

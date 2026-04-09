@@ -99,6 +99,8 @@ export function DraggableCalendarioEscala({
 
   const getLabel = (dia?: DiaEscala) => {
     if (!dia) return 'TRAB';
+    const isHoliday = Boolean(dia.feriadoNome || dia.descricao?.toLowerCase().includes('feriado'));
+    if (isHoliday) return 'FER';
     if (dia.tipo === 'folga') return 'FOLGA';
     if (dia.tipo === 'fds') return 'FDS';
     if (dia.turno) return dia.turno.split('-')[0];

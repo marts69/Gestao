@@ -7,7 +7,7 @@ Objetivo: manter uma fonte única de pendências abertas, em formato pronto para
 
 - Prioridade: P0 (sprint atual), P1 (próxima sprint), P2 (evolutivo).
 - Responsável: papel dono da execução (podendo ter co-responsável).
-- Status: todos os itens abaixo estão ativos e em aberto.
+- Status: itens com `[ ]` estão ativos; itens com `[x]` foram concluídos e mantidos como evidência.
 
 ## Planejamento de Sprint (Execução)
 
@@ -19,7 +19,7 @@ Período sugerido: 10/04/2026 a 16/04/2026
 |------|----------|-------------|------------|
 | BLG-001 | Regra final de exibição no agendamento para folga | Produto/Supervisão + Frontend | 3h |
 | BLG-002 | Bloqueio automático/manual para colaborador em folga | Backend + Frontend | 8h |
-| BLG-003 | Feriados automáticos integrados na malha | Backend + Frontend | 6h |
+| BLG-003 | Feriados automáticos integrados na malha (concluído em 09/04/2026) | Backend + Frontend | 6h |
 
 Total estimado Sprint 01: 17h
 
@@ -54,10 +54,11 @@ Esforço agregado estimado para roadmap P2 (BLG-008 a BLG-013): 70h a 110h.
   - Critério de aceite: criação de agendamento para colaborador em folga bloqueada conforme regra definida; fluxo manual disponível para supervisor quando aplicável.
   - Fonte: RESUMO_CONSOLIDADO.md
 
-- [ ] BLG-003 - Integrar feriados automaticamente na malha de escalas (além do utilitário isolado).
+- [x] BLG-003 - Integrar feriados automaticamente na malha de escalas (além do utilitário isolado).
   - Responsável: Backend
   - Co-responsável: Frontend
   - Critério de aceite: dias feriados impactam a malha automaticamente e aparecem de forma consistente na UI.
+  - Evidências: integração no pipeline da malha (`escalaCalculator`), atualização de calendário/timeline/dashboard e endpoint backend `/feriados`.
   - Fontes: RESUMO_CONSOLIDADO.md, ESCALA_FEATURES.md
 
 ## P1 - Próxima Sprint (Produto)
@@ -129,3 +130,4 @@ Esforço agregado estimado para roadmap P2 (BLG-008 a BLG-013): 70h a 110h.
 - Revisão dos checklists antigos com status desatualizado.
 - Migração Prisma do módulo de escalas no ambiente alvo marcada como concluída em INTEGRACAO_ESCALAS.md.
 - Pendências removidas dos documentos históricos e centralizadas neste arquivo.
+- BLG-003 concluído com validação de testes/lint/build em 09/04/2026.

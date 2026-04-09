@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
+  aplicarFeriadosNaEscala,
   aplicarFolgasDomingoNoMes,
   calcularHorasEscala,
+  gerarEscalaComRegras,
   gerarEscala12x36,
   gerarEscala5x2,
   gerarEscala6x1,
@@ -47,6 +49,45 @@ describe('gerarEscala12x36', () => {
     expect(tipos[2]).toBe('folga');
     expect(tipos[3]).toBe('folga');
     expect(tipos[4]).toBe('trabalho');
+  });
+});
+
+describe('aplicarFeriadosNaEscala', () => {
+  it('converte trabalho em feriado para dia indisponivel (fds) com descricao de feriado', () => {
+    const out = aplicarFeriadosNaEscala([
+      {
+        data: '2026-05-01',
+        tipo: 'trabalho',
+        turno: '08:00-18:00',
+        horaInicio: '08:00',
+        horaFim: '18:00',
+      },
+    ]);
+
+    expect(out[0]?.tipo).toBe('fds');
+    expect(out[0]?.turno).toBeUndefined();
+    expect(out[0]?.feriadoNome).toBe('Dia do Trabalho');
+    expect(out[0]?.descricao).toContain('Feriado');
+  });
+});
+
+describe('gerarEscalaComRegras', () => {
+  it('aplica feriado e folga dominical no mesmo pipeline', () => {
+    const out = gerarEscalaComRegras(
+      {
+        tipo: '6x1',
+        dataInicio: BR_NOON('2026-04-20'),
+      },
+      8,
+      { folgasDomingoNoMes: 1 },
+    );
+
+    const tiradentes = out.find((dia) => dia.data === '2026-04-21');
+    const domingo = out.find((dia) => dia.data === '2026-04-26');
+
+    expect(tiradentes?.feriadoNome).toBe('Tiradentes');
+    expect(tiradentes?.tipo).toBe('fds');
+    expect(domingo?.folgaDominicalConfigurada).toBe(true);
   });
 });
 

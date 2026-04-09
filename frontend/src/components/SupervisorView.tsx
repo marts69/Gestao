@@ -8,7 +8,7 @@ import { SupervisorEquipeTab } from '../features/team/components';
 import { SupervisorEscalaTab } from '../features/scale/components';
 import { SupervisorPlanejamentoTab } from '../features/planning/components';
 import { SupervisorServicosTab } from '../features/services/components';
-import { aplicarFolgasDomingoNoMes, gerarEscala, type DiaEscala } from '../utils/escalaCalculator';
+import { gerarEscalaComRegras, type DiaEscala } from '../utils/escalaCalculator';
 import { analisarConformidadeCLT } from '../utils/cltValidator';
 
 type ServicePayload = {
@@ -573,20 +573,16 @@ export function SupervisorView({ employees, appointments, services, clients, sca
     const firstDay = `${year}-${String(month).padStart(2, '0')}-01`;
     const daysInMonth = new Date(year, month, 0).getDate();
 
-    const diasBase = gerarEscala(
+    const diasComRegras = gerarEscalaComRegras(
       {
         tipo: options?.tipoEscala || employee.tipoEscala || '6x1',
         dataInicio: firstDay,
       },
       daysInMonth,
+      { folgasDomingoNoMes: options?.folgasDomingoNoMes ?? employee.folgasDomingoNoMes ?? 2 },
     );
 
-    const diasComDomingo = aplicarFolgasDomingoNoMes(
-      diasBase,
-      options?.folgasDomingoNoMes ?? employee.folgasDomingoNoMes ?? 2,
-    );
-
-    return diasComDomingo.map((dia) => applyOverrideToDia(employeeId, dia));
+    return diasComRegras.map((dia) => applyOverrideToDia(employeeId, dia));
   }, [activeNonAdminEmployees, applyOverrideToDia, selectedScaleMonth]);
 
   const selectedScaleCalendar = useMemo(() => {

@@ -7,7 +7,7 @@ import { useAuth } from './AuthContext';
 import { LoginView } from './components/LoginView';
 import io from 'socket.io-client';
 import { getSocketUrl } from './config/api';
-import { aplicarFolgasDomingoNoMes, gerarEscala, type DiaEscala } from './utils/escalaCalculator';
+import { gerarEscalaComRegras, type DiaEscala } from './utils/escalaCalculator';
 import { analisarConformidadeCLT } from './utils/cltValidator';
 import { AuditorModal } from './components/AuditorModal';
 import { Employee, Appointment, Service, Client, TurnoSwapRequest, TurnoSwapStatus, ServiceEligibilityMode } from './types'; // Tipos mais fortes
@@ -379,20 +379,16 @@ export default function App() {
 
     return staff
       .map((emp) => {
-        const diasBase = gerarEscala(
+        const diasComRegras = gerarEscalaComRegras(
           {
             tipo: emp.tipoEscala || '6x1',
             dataInicio: firstDay,
           },
           daysInMonth,
+          { folgasDomingoNoMes: emp.folgasDomingoNoMes ?? 2 },
         );
 
-        const diasComDomingo = aplicarFolgasDomingoNoMes(
-          diasBase,
-          emp.folgasDomingoNoMes ?? 2,
-        );
-
-        const malha = diasComDomingo.map((dia) => applyOverrideToDia(emp.id, dia));
+        const malha = diasComRegras.map((dia) => applyOverrideToDia(emp.id, dia));
         const analise = analisarConformidadeCLT(malha);
 
         return {
