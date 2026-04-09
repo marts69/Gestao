@@ -450,7 +450,7 @@ export function CollaboratorView({
       />
 
       {showFolgas && (
-        <div className="fixed inset-0 bg-black/55 backdrop-blur-sm z-[80] p-4 flex items-center justify-center" onMouseDown={(event) => { if (event.target === event.currentTarget) setShowFolgas(false); }}>
+        <div className="fixed inset-0 bg-black/55 backdrop-blur-sm z-80 p-4 flex items-center justify-center" onMouseDown={(event) => { if (event.target === event.currentTarget) setShowFolgas(false); }}>
           <motion.div initial={{ opacity: 0, scale: 0.95, y: 10 }} animate={{ opacity: 1, scale: 1, y: 0 }} className="bg-surface-container-low p-6 rounded-3xl border border-outline-variant/10 shadow-2xl w-full max-w-lg" onMouseDown={(event) => event.stopPropagation()}>
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-headline text-primary">Minhas Folgas</h3>
@@ -480,7 +480,7 @@ export function CollaboratorView({
       )}
 
       {showMyScheduleModal && (
-        <div className="fixed inset-0 bg-black/55 backdrop-blur-sm z-[80] p-4 flex items-center justify-center" onMouseDown={(event) => { if (event.target === event.currentTarget) setShowMyScheduleModal(false); }}>
+        <div className="fixed inset-0 bg-black/55 backdrop-blur-sm z-80 p-4 flex items-center justify-center" onMouseDown={(event) => { if (event.target === event.currentTarget) setShowMyScheduleModal(false); }}>
           <motion.div initial={{ opacity: 0, scale: 0.95, y: 10 }} animate={{ opacity: 1, scale: 1, y: 0 }} className="bg-surface-container-low p-6 rounded-3xl border border-outline-variant/10 shadow-2xl w-full max-w-lg" onMouseDown={(event) => event.stopPropagation()}>
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-headline text-primary">Minha Escala</h3>
@@ -505,7 +505,7 @@ export function CollaboratorView({
                   ))}
                 </div>
                 <p className="text-xs text-on-surface-variant mt-3">
-                  A alteração da escala e das folgas e feita somente pela supervisao.
+                  A alteração da escala e das folgas é feita somente pela supervisão.
                 </p>
               </div>
 
@@ -518,7 +518,7 @@ export function CollaboratorView({
       )}
 
       {errorMessage && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100] p-4">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-100 p-4">
           <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="bg-surface-container-lowest p-8 rounded-3xl shadow-2xl max-w-sm w-full border border-error/30 text-center">
             <span className="material-symbols-outlined text-3xl text-error mb-4">error</span>
             <h2 className="text-2xl font-headline text-error mb-2">Ops!</h2>
@@ -531,7 +531,7 @@ export function CollaboratorView({
       {toastMessage && (
         <motion.div 
           initial={{ opacity: 0, y: 50, scale: 0.9 }} animate={{ opacity: 1, y: 0, scale: 1 }}
-          className="fixed bottom-8 right-8 bg-surface-container-highest text-on-surface border border-outline-variant/30 px-6 py-4 rounded-2xl shadow-xl flex items-center gap-3 z-[100]"
+          className="fixed bottom-8 right-8 bg-surface-container-highest text-on-surface border border-outline-variant/30 px-6 py-4 rounded-2xl shadow-xl flex items-center gap-3 z-100"
         >
           <span className="material-symbols-outlined text-primary">check_circle</span>
           <p className="text-sm font-bold">{toastMessage}</p>

@@ -35,13 +35,13 @@ const isEmployeeEligibleForService = (employee: Employee, service: Service): boo
 
   if (mode === 'cargo') {
     const allowedCargos = normalizeStringList(service.cargosPermitidos).map((cargo) => normalizeSearch(cargo));
-    if (allowedCargos.length === 0) return false;
+    if (allowedCargos.length === 0) return true;
     const employeeCargo = normalizeSearch(employee.cargo || employee.specialty || '');
     return allowedCargos.includes(employeeCargo);
   }
 
   const allowedSkills = normalizeStringList(service.habilidadesPermitidas).map((skill) => normalizeSearch(skill));
-  if (allowedSkills.length === 0) return false;
+  if (allowedSkills.length === 0) return true;
   const employeeSkills = new Set((employee.habilidades || []).map((skill) => normalizeSearch(String(skill))));
   return allowedSkills.some((skill) => employeeSkills.has(skill));
 };
@@ -123,19 +123,36 @@ export function BookingModal({ receptionDate, initialTime, initialEmpId, clients
   const bookingBusy = Boolean(isAddingAppointment || isSubmitting);
 
   useEffect(() => {
+    const restoredBookEmp = draft.bookEmp || initialEmpId;
+    const isRestoredEmpValid = employees.some((employee) => employee.id === restoredBookEmp && employee.id !== 'admin');
+    const fallbackEmployeeId = employees.find((employee) => employee.id === initialEmpId && employee.id !== 'admin')?.id
+      || employees.find((employee) => employee.id !== 'admin')?.id
+      || '';
+
+    const restoredServices = Array.isArray(draft.bookService)
+      ? draft.bookService.filter((serviceName) => services.some((service) => service.nome === serviceName))
+      : [];
+
+    const restoredServiceSearchTerm = draft.serviceSearchTerm || '';
+    const normalizedSearchTerm = normalizeSearch(restoredServiceSearchTerm);
+    const hasSearchMatch = !normalizedSearchTerm || services.some((service) => {
+      const name = normalizeSearch(service.nome);
+      const description = normalizeSearch(service.descricao || '');
+      return name.includes(normalizedSearchTerm) || description.includes(normalizedSearchTerm);
+    });
+
     setClientMode(draft.clientMode);
     setBookDate(draft.bookDate || receptionDate);
     setBookName(draft.bookName || '');
     setBookPhone(formatPhone(draft.bookPhone || ''));
     setBookCpf(formatCpf(draft.bookCpf || ''));
     setBookTime(draft.bookTime || initialTime);
-    setBookEmp(draft.bookEmp || initialEmpId);
-    setBookService(Array.isArray(draft.bookService) ? draft.bookService : []);
-    setServiceSearchTerm(draft.serviceSearchTerm || '');
+    setBookEmp(isRestoredEmpValid ? restoredBookEmp : fallbackEmployeeId);
+    setBookService(restoredServices);
+    setServiceSearchTerm(hasSearchMatch ? restoredServiceSearchTerm : '');
     setBookDetails(draft.bookDetails || '');
     setBookClientObservation(draft.bookClientObservation || '');
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [draft, employees, initialEmpId, initialTime, receptionDate, services]);
 
   useEffect(() => {
     setDraft({

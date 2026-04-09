@@ -43,6 +43,11 @@ export function PlanningDayPopover({ isOpen, dia, onClose, onSave }: PlanningDay
     });
   }, [dia]);
 
+  const isToday = useMemo(() => {
+    if (!dia) return false;
+    return dia.data === new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
+  }, [dia]);
+
   const handleSave = async () => {
     setIsSaving(true);
     setSaveError(null);
@@ -82,15 +87,17 @@ export function PlanningDayPopover({ isOpen, dia, onClose, onSave }: PlanningDay
           >
             <div className="bg-surface-container p-6 rounded-3xl shadow-2xl border border-outline-variant/20">
               {/* Header */}
-              <div className="flex items-center justify-between mb-4">
+              <div className="flex items-start justify-between mb-6">
                 <div>
+                  <div className="flex items-center gap-2 mb-1">
+                    <h3 className="text-xl font-headline text-on-surface capitalize">
+                      {formattedDate}
+                    </h3>
+                    {isToday && <span className="bg-primary text-on-primary text-[10px] uppercase tracking-widest font-bold px-2 py-0.5 rounded-full shadow-sm">Hoje</span>}
+                  </div>
                   <p className="text-xs text-on-surface-variant uppercase tracking-widest font-bold">
-                    {dia.data}
+                    Editar Escala
                   </p>
-                  <p className="text-[11px] text-on-surface-variant mt-1 capitalize line-clamp-1">{formattedDate}</p>
-                  <h3 className="text-lg font-headline text-on-surface">
-                    Planejar Dia {dia.data.split('-')[2]}
-                  </h3>
                 </div>
                 <button
                   onClick={onClose}
@@ -102,30 +109,25 @@ export function PlanningDayPopover({ isOpen, dia, onClose, onSave }: PlanningDay
 
               {/* Type Selection */}
               <div className="mb-4">
-                <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-2">
-                  Tipo de Dia
-                </label>
-                <div className="grid grid-cols-3 gap-2">
+                <div className="flex bg-surface-container-low p-1 rounded-xl border border-outline-variant/20 mb-4">
                   {(['trabalho', 'folga', 'fds'] as const).map((type) => (
                     <button
                       key={type}
+                      type="button"
                       onClick={() => {
                         setSelectedType(type);
                         if (type === 'trabalho' && !selectedTurno) {
                           setSelectedTurno('08:00-18:00');
                         }
                       }}
-                      className={`py-2 px-3 rounded-xl text-xs font-bold uppercase tracking-wider transition-all ${
+                      className={`flex-1 py-2.5 flex items-center justify-center gap-1.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-all ${
                         selectedType === type
-                          ? type === 'trabalho'
-                            ? 'bg-primary text-on-primary shadow-md'
-                            : type === 'folga'
-                            ? 'bg-secondary text-on-secondary shadow-md'
-                            : 'bg-tertiary text-on-tertiary shadow-md'
-                          : 'bg-surface-container-low text-on-surface-variant border border-outline-variant/30 hover:border-outline-variant'
+                          ? 'bg-surface-container-highest text-on-surface shadow-sm border border-outline-variant/30'
+                          : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-container'
                       }`}
                     >
-                      {type === 'trabalho' ? '💼 Trabalho' : type === 'folga' ? '🏖️ Folga' : '⚪ FDS'}
+                      <span className="material-symbols-outlined text-[16px]">{type === 'trabalho' ? 'work' : type === 'folga' ? 'event_busy' : 'weekend'}</span>
+                      {type === 'trabalho' ? 'Trabalho' : type === 'folga' ? 'Folga' : 'FDS'}
                     </button>
                   ))}
                 </div>
@@ -152,8 +154,9 @@ export function PlanningDayPopover({ isOpen, dia, onClose, onSave }: PlanningDay
               )}
 
               {selectedType !== 'trabalho' && (
-                <div className="mb-4 rounded-xl border border-outline-variant/20 bg-surface-container-low px-3 py-2 text-[11px] text-on-surface-variant">
-                  Turno sera removido automaticamente para dias de folga e FDS.
+                <div className="mb-4 rounded-xl border border-outline-variant/30 bg-surface-container-low px-4 py-3 flex items-center gap-2 text-xs text-on-surface-variant">
+                  <span className="material-symbols-outlined text-[16px] text-primary">info</span>
+                  O turno será removido automaticamente.
                 </div>
               )}
 
@@ -166,7 +169,7 @@ export function PlanningDayPopover({ isOpen, dia, onClose, onSave }: PlanningDay
                   value={descricao}
                   onChange={(e) => setDescricao(e.target.value)}
                   placeholder="Ex: Substituindo fulano, turno adicional, etc."
-                  className="w-full bg-surface-container-low border border-outline-variant/20 rounded-xl p-2 text-sm text-on-surface focus:ring-1 focus:ring-primary outline-none transition-all resize-none min-h-[60px]"
+                  className="w-full bg-surface-container-low border border-outline-variant/20 rounded-xl p-3 text-sm text-on-surface focus:ring-1 focus:ring-primary outline-none transition-all resize-none min-h-[80px]"
                 />
               </div>
 
@@ -179,15 +182,17 @@ export function PlanningDayPopover({ isOpen, dia, onClose, onSave }: PlanningDay
               {/* Buttons */}
               <div className="flex gap-2">
                 <button
+                  type="button"
                   onClick={onClose}
-                  className="flex-1 py-2 rounded-xl text-sm font-bold uppercase tracking-wider text-on-surface-variant hover:bg-surface-container-high transition-colors"
+                  className="flex-1 py-3 rounded-xl border border-outline-variant/30 text-sm font-bold uppercase tracking-wider text-on-surface-variant hover:bg-surface-container-high transition-colors"
                 >
                   Cancelar
                 </button>
                 <button
+                  type="button"
                   onClick={handleSave}
                   disabled={isSaving}
-                  className="flex-1 py-2 rounded-xl text-sm font-bold uppercase tracking-wider bg-primary text-on-primary hover:bg-primary-dim transition-colors disabled:opacity-60"
+                  className="flex-1 py-3 rounded-xl text-sm font-bold uppercase tracking-wider bg-primary text-on-primary hover:bg-primary-dim shadow-sm transition-colors disabled:opacity-60"
                 >
                   {isSaving ? 'Salvando...' : 'Salvar'}
                 </button>

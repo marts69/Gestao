@@ -119,7 +119,7 @@ export function AnamneseForm({ data, onChange, onClose }: Props) {
 
   return (
     <div
-      className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[70] flex justify-center items-start overflow-y-auto p-4 sm:p-8"
+      className="fixed inset-0 bg-black/60 backdrop-blur-sm z-70 flex justify-center items-start overflow-y-auto p-4 sm:p-8"
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) {
           onClose();

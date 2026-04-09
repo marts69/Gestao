@@ -6,6 +6,7 @@ import { formatAnamneseStorage, parseClientObservation } from '../../../utils/an
 import { useSearch } from '../../../hooks/useSearch';
 import { ConfirmDialog } from '../../../components/ConfirmDialog';
 import { formatCpf, formatPhone } from '../../../utils/formatters';
+import { getLocalTodayString } from '../../appointments/utils/appointmentCore';
 
 interface SupervisorClientesTabProps {
   clients: Client[];
@@ -23,6 +24,8 @@ export function SupervisorClientesTab({ clients, appointments, services, onEditC
   const [searchTerm, setSearchTerm] = useState('');
   const [editingClient, setEditingClient] = useState<Client | null>(null);
   const [editingClientNote, setEditingClientNote] = useState('');
+  const [editingClientAlergias, setEditingClientAlergias] = useState('');
+  const [editingClientPreferencias, setEditingClientPreferencias] = useState('');
   const [clientToDelete, setClientToDelete] = useState<string | null>(null);
   const [summaryClient, setSummaryClient] = useState<{ id: string; name: string; note: string; items: string[]; data: AnamneseData } | null>(null);
   const [editingAnamneseClient, setEditingAnamneseClient] = useState<{ id: string; name: string; note: string; data: AnamneseData } | null>(null);
@@ -105,11 +108,15 @@ export function SupervisorClientesTab({ clients, appointments, services, onEditC
       telefone: editingClient.telefone,
       cpf: editingClient.cpf,
       observacao: finalObservation,
+      alergias: editingClientAlergias.split(',').map(s => s.trim()).filter(Boolean),
+      preferencias: editingClientPreferencias.split(',').map(s => s.trim()).filter(Boolean),
     });
     setToastMessage?.('Cliente atualizado!');
     setTimeout(() => setToastMessage?.(null), 3000);
     setEditingClient(null);
     setEditingClientNote('');
+    setEditingClientAlergias('');
+    setEditingClientPreferencias('');
   };
 
   const handleDeleteConfirm = () => {
@@ -160,6 +167,7 @@ export function SupervisorClientesTab({ clients, appointments, services, onEditC
                 <th className="py-3 px-4 text-[10px] font-bold text-outline uppercase tracking-widest">Nome</th>
                 <th className="py-3 px-4 text-[10px] font-bold text-outline uppercase tracking-widest">CPF</th>
                 <th className="py-3 px-4 text-[10px] font-bold text-outline uppercase tracking-widest">Telefone</th>
+                <th className="py-3 px-4 text-[10px] font-bold text-outline uppercase tracking-widest hidden lg:table-cell">Perfil Clínico</th>
                 <th className="py-3 px-4 text-[10px] font-bold text-outline uppercase tracking-widest hidden md:table-cell">Observacoes</th>
                 <th className="py-3 px-4 text-[10px] font-bold text-outline uppercase tracking-widest text-right">Acoes</th>
               </tr>
@@ -170,6 +178,13 @@ export function SupervisorClientesTab({ clients, appointments, services, onEditC
                   <td className="py-4 px-4 text-sm font-medium text-on-surface">{client.nome}</td>
                   <td className="py-4 px-4 text-sm text-on-surface-variant">{client.cpf ? formatCpf(client.cpf) : '-'}</td>
                   <td className="py-4 px-4 text-sm text-on-surface-variant">{client.telefone ? formatPhone(client.telefone) : '-'}</td>
+                  <td className="py-4 px-4 text-xs hidden lg:table-cell">
+                    <div className="flex flex-wrap gap-1">
+                      {client.alergias && client.alergias.length > 0 && <span className="bg-error/10 text-error px-2 py-0.5 rounded font-bold uppercase tracking-wider text-[8px] flex items-center gap-1"><span className="material-symbols-outlined text-[10px]">medical_information</span> Alergias</span>}
+                      {client.preferencias && client.preferencias.length > 0 && <span className="bg-tertiary/10 text-tertiary px-2 py-0.5 rounded font-bold uppercase tracking-wider text-[8px] flex items-center gap-1"><span className="material-symbols-outlined text-[10px]">favorite</span> Preferências</span>}
+                      {!client.alergias?.length && !client.preferencias?.length && <span className="text-on-surface-variant opacity-50">-</span>}
+                    </div>
+                  </td>
                   <td className="py-4 px-4 text-xs text-on-surface-variant max-w-xs truncate hidden md:table-cell" title={parseClientObservation(client.observacao).note}>
                     {parseClientObservation(client.observacao).note || 'Nenhuma'}
                   </td>
@@ -197,6 +212,8 @@ export function SupervisorClientesTab({ clients, appointments, services, onEditC
                       onClick={() => {
                         setEditingClient(client);
                         setEditingClientNote(parseClientObservation(client.observacao).note);
+                        setEditingClientAlergias((client.alergias || []).join(', '));
+                        setEditingClientPreferencias((client.preferencias || []).join(', '));
                       }}
                       disabled={!onEditClient}
                       className="p-2 text-on-surface-variant hover:text-primary rounded-full disabled:opacity-40"
@@ -289,6 +306,14 @@ export function SupervisorClientesTab({ clients, appointments, services, onEditC
                   maxLength={14}
                   className="w-full bg-surface-container-low border border-outline-variant/20 rounded-xl p-3 text-sm focus:ring-1 focus:ring-primary outline-none text-on-surface"
                 />
+              </div>
+              <div>
+                <label className="block text-[10px] font-bold text-on-surface-variant tracking-[0.15em] uppercase mb-2">Alergias e Restrições (Separado por vírgula)</label>
+                <input type="text" value={editingClientAlergias} onChange={e => setEditingClientAlergias(e.target.value)} placeholder="Ex: Óleo de Amêndoas, Lavanda" className="w-full bg-surface-container-low border border-outline-variant/20 rounded-xl p-3 text-sm focus:ring-1 focus:ring-primary outline-none text-on-surface" />
+              </div>
+              <div>
+                <label className="block text-[10px] font-bold text-on-surface-variant tracking-[0.15em] uppercase mb-2">Preferências (Separado por vírgula)</label>
+                <input type="text" value={editingClientPreferencias} onChange={e => setEditingClientPreferencias(e.target.value)} placeholder="Ex: Pressão Forte, Chá Verde" className="w-full bg-surface-container-low border border-outline-variant/20 rounded-xl p-3 text-sm focus:ring-1 focus:ring-primary outline-none text-on-surface" />
               </div>
               <div>
                 <label className="block text-[10px] font-bold text-on-surface-variant tracking-[0.15em] uppercase mb-2">Observacoes</label>
@@ -405,20 +430,45 @@ export function SupervisorClientesTab({ clients, appointments, services, onEditC
               const fullHistory = getClientHistory(historyClient);
               const filteredHistory = getFilteredHistory(fullHistory);
               const completedFiltered = filteredHistory.filter((appointment) => appointment.status === 'completed');
+              const todayStr = getLocalTodayString();
+              const noShows = filteredHistory.filter((appointment) => appointment.status !== 'completed' && appointment.date < todayStr);
               const totalSpent = completedFiltered.reduce((sum, appointment) => sum + getAppointmentValue(appointment), 0);
 
               return (
                 <>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
+                  <div className="bg-surface-container-low p-5 rounded-2xl border border-outline-variant/20 mb-6 flex flex-col md:flex-row gap-6">
+                     <div className="flex-1">
+                        <h4 className="text-xs font-bold uppercase tracking-widest text-outline mb-2 flex items-center gap-1"><span className="material-symbols-outlined text-[14px]">medical_information</span> Alergias & Restrições</h4>
+                        {historyClient.alergias?.length ? (
+                           <div className="flex flex-wrap gap-1.5">
+                             {historyClient.alergias.map(a => <span key={a} className="bg-error/10 text-error px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wider">{a}</span>)}
+                           </div>
+                        ) : <p className="text-xs text-on-surface-variant">Nenhuma restrição declarada.</p>}
+                     </div>
+                     <div className="flex-1 border-t md:border-t-0 md:border-l border-outline-variant/20 pt-4 md:pt-0 md:pl-6">
+                        <h4 className="text-xs font-bold uppercase tracking-widest text-outline mb-2 flex items-center gap-1"><span className="material-symbols-outlined text-[14px]">favorite</span> Preferências</h4>
+                        {historyClient.preferencias?.length ? (
+                           <div className="flex flex-wrap gap-1.5">
+                             {historyClient.preferencias.map(p => <span key={p} className="bg-tertiary/10 text-tertiary px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wider">{p}</span>)}
+                           </div>
+                        ) : <p className="text-xs text-on-surface-variant">Nenhuma preferência declarada.</p>}
+                     </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-6">
                     <div className="bg-surface-container-low border border-outline-variant/20 rounded-xl px-4 py-3">
-                      <p className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">Atendimentos no filtro</p>
-                      <p className="text-lg font-headline text-on-surface">{filteredHistory.length}</p>
+                      <p className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant truncate">Concluídos</p>
+                      <p className="text-lg font-headline text-primary">{completedFiltered.length}</p>
                     </div>
                     <div className="bg-surface-container-low border border-outline-variant/20 rounded-xl px-4 py-3">
-                      <p className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">Total gasto (concluídos)</p>
+                      <p className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant truncate">Receita LTV</p>
                       <p className="text-lg font-headline text-primary">
                         {totalSpent.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                       </p>
+                    </div>
+                    <div className="bg-surface-container-low border border-outline-variant/20 rounded-xl px-4 py-3 col-span-2 sm:col-span-1">
+                      <p className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant truncate">Taxa de Faltas (No-Show)</p>
+                      <p className={`text-lg font-headline ${noShows.length > 0 ? 'text-error' : 'text-on-surface'}`}>{noShows.length} Faltas</p>
                     </div>
                   </div>
 

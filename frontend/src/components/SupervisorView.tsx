@@ -20,6 +20,10 @@ type ServicePayload = {
   modoElegibilidade?: ServiceEligibilityMode;
   cargosPermitidos?: string[];
   habilidadesPermitidas?: string[];
+  profissionaisPermitidos?: string[];
+  categoria?: string;
+  tempoHigienizacaoMin?: number | string;
+  comissaoPercentual?: number | string;
 };
 
 const normalizeServiceSearch = (value: string) => value
@@ -49,6 +53,11 @@ const getEligibilitySummary = (service: Service): string => {
   if (mode === 'habilidade') {
     const habilidades = Array.isArray(service.habilidadesPermitidas) ? service.habilidadesPermitidas.filter(Boolean) : [];
     return habilidades.length > 0 ? `Somente habilidades: ${habilidades.join(', ')}` : 'Restrito por habilidade';
+  }
+
+  if (mode === 'profissional') {
+    const profissionais = Array.isArray(service.profissionaisPermitidos) ? service.profissionaisPermitidos.filter(Boolean) : [];
+    return profissionais.length > 0 ? `Somente profissionais: ${profissionais.join(', ')}` : 'Restrito por profissional';
   }
 
   return 'Disponível para qualquer profissional';
@@ -131,6 +140,13 @@ export function SupervisorView({ employees, appointments, services, clients, sca
     }
     return 'dashboard';
   });
+
+  const [activeModule, setActiveModule] = useState<'operacional' | 'rh'>(() => {
+    if (typeof window === 'undefined') return 'operacional';
+    const saved = window.sessionStorage.getItem('supervisor-active-module');
+    return saved === 'rh' ? 'rh' : 'operacional';
+  });
+
   const [selectedScaleEmployeeId, setSelectedScaleEmployeeId] = useState('');
   const [selectedScaleMonth, setSelectedScaleMonth] = useState(getLocalTodayString().slice(0, 7));
   const [selectedPlanningEmployeeId, setSelectedPlanningEmployeeId] = useState<string | null>(null);
@@ -186,6 +202,7 @@ export function SupervisorView({ employees, appointments, services, clients, sca
   const [reallocateToId, setReallocateToId] = useState<string>('');
   // Estado para controlar o Modal de Detalhes do Colaborador
   const [viewingEmployee, setViewingEmployee] = useState<Employee | null>(null);
+  const [viewingEmployeeTab, setViewingEmployeeTab] = useState<'dashboard' | 'jornada' | 'ocorrencias'>('dashboard');
   // Estado para controlar o Modal de Exclusão de Serviço
   const [serviceToDelete, setServiceToDelete] = useState<string | null>(null);
 
@@ -201,8 +218,12 @@ export function SupervisorView({ employees, appointments, services, clients, sca
   const [newServiceIcon, setNewServiceIcon] = useState(SERVICE_ICONS[0]);
   const [newServiceDescription, setNewServiceDescription] = useState('');
   const [serviceEligibilityMode, setServiceEligibilityMode] = useState<ServiceEligibilityMode>('livre');
+  const [newServiceCategoria, setNewServiceCategoria] = useState('');
+  const [newServiceTempoHigienizacao, setNewServiceTempoHigienizacao] = useState('0');
+  const [newServiceComissao, setNewServiceComissao] = useState('');
   const [serviceAllowedCargosInput, setServiceAllowedCargosInput] = useState('');
   const [serviceAllowedSkillsInput, setServiceAllowedSkillsInput] = useState('');
+  const [serviceAllowedProfessionalsInput, setServiceAllowedProfessionalsInput] = useState('');
   const [serviceSearchTerm, setServiceSearchTerm] = useState('');
   const deferredServiceSearchTerm = useDeferredValue(serviceSearchTerm);
 
@@ -246,10 +267,41 @@ export function SupervisorView({ employees, appointments, services, clients, sca
     });
   }, [scaleOverrides]);
 
+  // Escuta o comando de Quick Fix vindo do Sino Global
+  useEffect(() => {
+    const handleQuickResolve = (e: Event) => {
+      const customEvent = e as CustomEvent<{ employeeId: string }>;
+      const { employeeId } = customEvent.detail;
+      const emp = employees.find(el => el.id === employeeId);
+      if (emp) {
+        setActiveTab('planejamento');
+        setPlanningViewMode('timeline');
+        setEmployeeSearchTerm(emp.name); // Isola o funcionário na tela
+        setShowTopAlerts(true); // Garante que os avisos internos da aba fiquem visíveis
+      }
+    };
+    window.addEventListener('quick-resolve-clt', handleQuickResolve);
+    return () => window.removeEventListener('quick-resolve-clt', handleQuickResolve);
+  }, [employees]);
+
   useEffect(() => {
     if (typeof window === 'undefined') return;
     window.sessionStorage.setItem('supervisor-active-tab', activeTab);
   }, [activeTab]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    window.sessionStorage.setItem('supervisor-active-module', activeModule);
+  }, [activeModule]);
+
+  const handleModuleChange = (module: 'operacional' | 'rh') => {
+    setActiveModule(module);
+    if (module === 'rh' && activeTab !== 'equipe' && activeTab !== 'planejamento') {
+      setActiveTab('planejamento');
+    } else if (module === 'operacional' && (activeTab === 'equipe' || activeTab === 'planejamento')) {
+      setActiveTab('escala');
+    }
+  };
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -352,8 +404,12 @@ export function SupervisorView({ employees, appointments, services, clients, sca
       icone: newServiceIcon,
       descricao: newServiceDescription,
       modoElegibilidade: serviceEligibilityMode,
+      categoria: newServiceCategoria,
+      tempoHigienizacaoMin: newServiceTempoHigienizacao,
+      comissaoPercentual: newServiceComissao,
       cargosPermitidos: serviceEligibilityMode === 'cargo' ? normalizeRuleList(serviceAllowedCargosInput) : [],
       habilidadesPermitidas: serviceEligibilityMode === 'habilidade' ? normalizeRuleList(serviceAllowedSkillsInput) : [],
+      profissionaisPermitidos: serviceEligibilityMode === 'profissional' ? normalizeRuleList(serviceAllowedProfessionalsInput) : [],
     };
 
     try {
@@ -390,8 +446,12 @@ export function SupervisorView({ employees, appointments, services, clients, sca
     setNewServiceIcon(SERVICE_ICONS[0]);
     setNewServiceDescription('');
     setServiceEligibilityMode('livre');
+    setNewServiceCategoria('');
+    setNewServiceTempoHigienizacao('0');
+    setNewServiceComissao('');
     setServiceAllowedCargosInput('');
     setServiceAllowedSkillsInput('');
+    setServiceAllowedProfessionalsInput('');
   };
 
   const todayStr = getLocalTodayString();
@@ -418,10 +478,23 @@ export function SupervisorView({ employees, appointments, services, clients, sca
     .filter(Boolean)))
     .sort((a, b) => a.localeCompare(b)), [employees]);
 
+  const availableProfessionals = useMemo(() => Array.from(new Set(employees
+    .filter((emp) => emp.id !== 'admin')
+    .map((employee) => (employee.name || '').trim())
+    .filter(Boolean)))
+    .sort((a, b) => a.localeCompare(b)), [employees]);
+
   const { viewingEmployeeRevenue, viewingEmployeeNoShows } = useMemo(() => {
     if (!viewingEmployee) return { viewingEmployeeRevenue: 0, viewingEmployeeNoShows: 0 };
-    const revenue = appointments.filter(a => a.assignedEmployeeId === viewingEmployee.id && a.status === 'completed').reduce((acc, app) => acc + app.services.reduce((s, sName) => s + (Number(services.find(srv => srv.nome === sName)?.preco) || 0), 0), 0);
-    const noShows = appointments.filter(a => a.assignedEmployeeId === viewingEmployee.id && a.status === 'scheduled' && a.date < todayStr).length;
+    
+    const servicePriceMap = new Map(services.map(s => [s.nome, Number(s.preco) || 0]));
+    let revenue = 0;
+    let noShows = 0;
+    for (const app of appointments) {
+      if (app.assignedEmployeeId !== viewingEmployee.id) continue;
+      if (app.status === 'completed') revenue += app.services.reduce((acc, sName) => acc + (servicePriceMap.get(sName) || 0), 0);
+      else if (app.status === 'scheduled' && app.date < todayStr) noShows += 1;
+    }
     return { viewingEmployeeRevenue: revenue, viewingEmployeeNoShows: noShows };
   }, [viewingEmployee, appointments, services]);
 
@@ -875,10 +948,16 @@ export function SupervisorView({ employees, appointments, services, clients, sca
   const cltRealtimeAlerts = useMemo(() => {
     const referenceDate = getLocalTodayString();
 
+    const appsByEmp = new Map<string, Appointment[]>();
+    for (const app of appointments) {
+      if (!appsByEmp.has(app.assignedEmployeeId)) appsByEmp.set(app.assignedEmployeeId, []);
+      appsByEmp.get(app.assignedEmployeeId)!.push(app);
+    }
+
     return activeNonAdminEmployees
       .map((emp) => {
         const analise = analisarConformidadeCLT(
-          appointments.filter((app) => app.assignedEmployeeId === emp.id),
+          appsByEmp.get(emp.id) || [],
           emp.bloqueios || [],
           referenceDate,
         );
@@ -968,48 +1047,44 @@ export function SupervisorView({ employees, appointments, services, clients, sca
       <div className="mb-6 space-y-4">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
           <div>
-            <h1 className="text-2xl md:text-3xl font-headline text-primary">Portal do Supervisor</h1>
-            <p className="text-sm text-on-surface-variant font-body">{activeTab === 'escala' ? 'Agenda operacional da recepção em tempo real.' : 'Gestão operacional do Spa com foco em produtividade e qualidade.'}</p>
+                <h1 className="text-2xl md:text-3xl font-headline text-primary">
+                  {activeModule === 'operacional' ? 'Portal do Supervisor' : 'Módulo de RH e Escalas'}
+                </h1>
+                <p className="text-sm text-on-surface-variant font-body">
+                  {activeModule === 'operacional' 
+                    ? (activeTab === 'escala' ? 'Agenda operacional da recepção em tempo real.' : 'Gestão operacional do Spa com foco em produtividade e qualidade.') 
+                    : 'Gestão da equipe, controle de ponto e jornadas contratuais.'}
+                </p>
           </div>
+              
+              {/* Botão de Navegação entre Módulos (Simula a troca de página) */}
+              {activeModule === 'operacional' ? (
+                <button onClick={() => handleModuleChange('rh')} className="bg-primary-container text-on-primary-container px-4 py-2.5 rounded-xl text-xs font-bold uppercase tracking-widest flex items-center gap-2 hover:bg-primary/20 transition-colors shadow-sm">
+                  <span className="material-symbols-outlined text-[18px]">badge</span>
+                  Acessar Módulo RH
+                </button>
+              ) : (
+                <button onClick={() => handleModuleChange('operacional')} className="bg-surface-container-high text-on-surface px-4 py-2.5 rounded-xl text-xs font-bold uppercase tracking-widest flex items-center gap-2 hover:bg-surface-container-highest transition-colors shadow-sm border border-outline-variant/20">
+                  <span className="material-symbols-outlined text-[18px]">arrow_back</span>
+                  Voltar para Operação
+                </button>
+              )}
         </div>
 
         <div className="flex bg-surface-container-low p-1 rounded-full border border-outline-variant/20 overflow-x-auto max-w-full w-full md:w-auto">
-          <button 
-            onClick={() => setActiveTab('dashboard')}
-            className={`px-6 py-2 rounded-full text-xs font-bold tracking-wide uppercase whitespace-nowrap transition-all ${activeTab === 'dashboard' ? 'bg-primary text-on-primary shadow-md' : 'text-on-surface-variant hover:text-primary'}`}
-          >
-            Dashboard
-          </button>
-          <button 
-            onClick={() => setActiveTab('escala')}
-            className={`px-6 py-2 rounded-full text-xs font-bold tracking-wide uppercase whitespace-nowrap transition-all ${activeTab === 'escala' ? 'bg-primary text-on-primary shadow-md' : 'text-on-surface-variant hover:text-primary'}`}
-          >
-            Agenda
-          </button>
-          <button
-            onClick={() => setActiveTab('planejamento')}
-            className={`px-6 py-2 rounded-full text-xs font-bold tracking-wide uppercase whitespace-nowrap transition-all ${activeTab === 'planejamento' ? 'bg-primary text-on-primary shadow-md' : 'text-on-surface-variant hover:text-primary'}`}
-          >
-            Escalas da Equipe
-          </button>
-          <button 
-            onClick={() => setActiveTab('servicos')}
-            className={`px-6 py-2 rounded-full text-xs font-bold tracking-wide uppercase whitespace-nowrap transition-all ${activeTab === 'servicos' ? 'bg-primary text-on-primary shadow-md' : 'text-on-surface-variant hover:text-primary'}`}
-          >
-            Serviços
-          </button>
-          <button
-            onClick={() => setActiveTab('clientes')}
-            className={`px-6 py-2 rounded-full text-xs font-bold tracking-wide uppercase whitespace-nowrap transition-all ${activeTab === 'clientes' ? 'bg-primary text-on-primary shadow-md' : 'text-on-surface-variant hover:text-primary'}`}
-          >
-            Clientes
-          </button>
-          <button 
-            onClick={() => setActiveTab('equipe')}
-            className={`px-6 py-2 rounded-full text-xs font-bold tracking-wide uppercase whitespace-nowrap transition-all ${activeTab === 'equipe' ? 'bg-primary text-on-primary shadow-md' : 'text-on-surface-variant hover:text-primary'}`}
-          >
-            Configurações
-          </button>
+              {activeModule === 'operacional' ? (
+                <>
+                  <button onClick={() => setActiveTab('dashboard')} className={`px-6 py-2 rounded-full text-xs font-bold tracking-wide uppercase whitespace-nowrap transition-all ${activeTab === 'dashboard' ? 'bg-primary text-on-primary shadow-md' : 'text-on-surface-variant hover:text-primary'}`}>Dashboard</button>
+                  <button onClick={() => setActiveTab('escala')} className={`px-6 py-2 rounded-full text-xs font-bold tracking-wide uppercase whitespace-nowrap transition-all ${activeTab === 'escala' ? 'bg-primary text-on-primary shadow-md' : 'text-on-surface-variant hover:text-primary'}`}>Agenda</button>
+                  <button onClick={() => setActiveTab('servicos')} className={`px-6 py-2 rounded-full text-xs font-bold tracking-wide uppercase whitespace-nowrap transition-all ${activeTab === 'servicos' ? 'bg-primary text-on-primary shadow-md' : 'text-on-surface-variant hover:text-primary'}`}>Serviços</button>
+                  <button onClick={() => setActiveTab('clientes')} className={`px-6 py-2 rounded-full text-xs font-bold tracking-wide uppercase whitespace-nowrap transition-all ${activeTab === 'clientes' ? 'bg-primary text-on-primary shadow-md' : 'text-on-surface-variant hover:text-primary'}`}>Clientes</button>
+                </>
+              ) : (
+                <>
+                  <button onClick={() => setActiveTab('planejamento')} className={`px-6 py-2 rounded-full text-xs font-bold tracking-wide uppercase whitespace-nowrap transition-all ${activeTab === 'planejamento' ? 'bg-primary text-on-primary shadow-md' : 'text-on-surface-variant hover:text-primary'}`}>Grade de Escalas</button>
+                  <button onClick={() => setActiveTab('equipe')} className={`px-6 py-2 rounded-full text-xs font-bold tracking-wide uppercase whitespace-nowrap transition-all ${activeTab === 'equipe' ? 'bg-primary text-on-primary shadow-md' : 'text-on-surface-variant hover:text-primary'}`}>Profissionais e Cargos</button>
+                </>
+              )}
         </div>
       </div>
 
@@ -1048,6 +1123,7 @@ export function SupervisorView({ employees, appointments, services, clients, sca
       {activeTab === 'planejamento' && (
         <SupervisorPlanejamentoTab
           employees={employees}
+          appointments={appointments}
           filterRole={filterRole}
           setFilterRole={setFilterRole}
           changeScaleMonthBy={changeScaleMonthBy}
@@ -1125,6 +1201,7 @@ export function SupervisorView({ employees, appointments, services, clients, sca
           onEditEmployee={onEditEmployee}
           setToastMessage={setToastMessage}
           setErrorMessage={setErrorMessage}
+          onViewEmployee={setViewingEmployee}
         />
       )}
 
@@ -1148,8 +1225,12 @@ export function SupervisorView({ employees, appointments, services, clients, sca
             setNewServiceIcon(srv.icone || SERVICE_ICONS[0]);
             setNewServiceDescription(srv.descricao || '');
             setServiceEligibilityMode(srv.modoElegibilidade || 'livre');
+            setNewServiceCategoria(srv.categoria || '');
+            setNewServiceTempoHigienizacao(String(srv.tempoHigienizacaoMin || 0));
+            setNewServiceComissao(srv.comissaoPercentual !== undefined && srv.comissaoPercentual !== null ? String(srv.comissaoPercentual) : '');
             setServiceAllowedCargosInput((srv.cargosPermitidos || []).join(', '));
             setServiceAllowedSkillsInput((srv.habilidadesPermitidas || []).join(', '));
+            setServiceAllowedProfessionalsInput((srv.profissionaisPermitidos || []).join(', '));
           }}
           onDeleteServiceCard={setServiceToDelete}
           serviceIcons={SERVICE_ICONS}
@@ -1163,12 +1244,21 @@ export function SupervisorView({ employees, appointments, services, clients, sca
           setNewServiceDuration={setNewServiceDuration}
           serviceEligibilityMode={serviceEligibilityMode}
           setServiceEligibilityMode={setServiceEligibilityMode}
+          newServiceCategoria={newServiceCategoria}
+          setNewServiceCategoria={setNewServiceCategoria}
+          newServiceTempoHigienizacao={newServiceTempoHigienizacao}
+          setNewServiceTempoHigienizacao={setNewServiceTempoHigienizacao}
+          newServiceComissao={newServiceComissao}
+          setNewServiceComissao={setNewServiceComissao}
           serviceAllowedCargosInput={serviceAllowedCargosInput}
           setServiceAllowedCargosInput={setServiceAllowedCargosInput}
           serviceAllowedSkillsInput={serviceAllowedSkillsInput}
           setServiceAllowedSkillsInput={setServiceAllowedSkillsInput}
+          serviceAllowedProfessionalsInput={serviceAllowedProfessionalsInput}
+          setServiceAllowedProfessionalsInput={setServiceAllowedProfessionalsInput}
           availableCargos={availableCargos}
           availableSkills={availableSkills}
+          availableProfessionals={availableProfessionals}
           appendRuleToken={appendRuleToken}
           newServiceDescription={newServiceDescription}
           setNewServiceDescription={setNewServiceDescription}
@@ -1293,6 +1383,24 @@ export function SupervisorView({ employees, appointments, services, clients, sca
                 </button>
               </div>
 
+          {cltRealtimeAlerts.find(a => a.id === viewingEmployee.id) && (
+            <div className="bg-amber-500/10 border border-amber-500/30 p-4 rounded-2xl mb-6 flex items-start gap-3">
+              <span className="material-symbols-outlined text-amber-500 mt-0.5">warning</span>
+              <div>
+                <h4 className="text-sm font-bold text-amber-600 uppercase tracking-widest">Alerta de Conformidade CLT</h4>
+                <p className="text-xs text-amber-700/80 mt-1">{cltRealtimeAlerts.find(a => a.id === viewingEmployee.id)?.resumo.join(' | ')}</p>
+              </div>
+            </div>
+          )}
+
+          <div className="flex gap-6 mb-6 border-b border-outline-variant/20">
+            <button onClick={() => setViewingEmployeeTab('dashboard')} className={`pb-3 text-xs font-bold uppercase tracking-widest transition-colors ${viewingEmployeeTab === 'dashboard' ? 'text-primary border-b-2 border-primary' : 'text-on-surface-variant hover:text-on-surface'}`}>Dashboard</button>
+            <button onClick={() => setViewingEmployeeTab('jornada')} className={`pb-3 text-xs font-bold uppercase tracking-widest transition-colors ${viewingEmployeeTab === 'jornada' ? 'text-primary border-b-2 border-primary' : 'text-on-surface-variant hover:text-on-surface'}`}>Regras de Jornada</button>
+            <button onClick={() => setViewingEmployeeTab('ocorrencias')} className={`pb-3 text-xs font-bold uppercase tracking-widest transition-colors ${viewingEmployeeTab === 'ocorrencias' ? 'text-primary border-b-2 border-primary' : 'text-on-surface-variant hover:text-on-surface'}`}>Ocorrências (RH)</button>
+          </div>
+
+          {viewingEmployeeTab === 'dashboard' && (
+            <>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
                  <div className="bg-surface-container-low p-4 rounded-2xl border border-outline-variant/10">
                    <p className="text-[10px] font-bold text-outline uppercase tracking-widest">Serviços Concluídos</p>
@@ -1376,6 +1484,63 @@ export function SupervisorView({ employees, appointments, services, clients, sca
                   </tbody>
                 </table>
               </div>
+            </>
+          )}
+
+          {viewingEmployeeTab === 'jornada' && (
+            <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar">
+              <h3 className="text-lg font-headline text-primary mb-4">Configuração Contratual</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="bg-surface-container-low p-5 rounded-2xl border border-outline-variant/10">
+                  <p className="text-[10px] font-bold text-outline uppercase tracking-widest mb-1">Padrão de Escala</p>
+                  <p className="text-xl font-headline text-on-surface">{viewingEmployee.tipoEscala || '6x1'}</p>
+                </div>
+                <div className="bg-surface-container-low p-5 rounded-2xl border border-outline-variant/10">
+                  <p className="text-[10px] font-bold text-outline uppercase tracking-widest mb-1">Folgas Dominicais (Mês)</p>
+                  <p className="text-xl font-headline text-on-surface">{viewingEmployee.folgasDomingoNoMes ?? 2} domingos</p>
+                </div>
+                <div className="bg-surface-container-low p-5 rounded-2xl border border-outline-variant/10">
+                  <p className="text-[10px] font-bold text-outline uppercase tracking-widest mb-1">Carga Horária Base</p>
+                  <p className="text-xl font-headline text-on-surface">{viewingEmployee.cargaHorariaSemanal ?? 44}h / semana</p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {viewingEmployeeTab === 'ocorrencias' && (
+            <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-headline text-primary">Histórico de Ocorrências</h3>
+                <span className="text-xs text-on-surface-variant bg-surface-container px-3 py-1 rounded-full font-bold uppercase tracking-widest">{viewingEmployee.bloqueios?.length || 0} registros</span>
+              </div>
+              {(!viewingEmployee.bloqueios || viewingEmployee.bloqueios.length === 0) ? (
+                <div className="flex flex-col items-center justify-center py-12 text-center border border-outline-variant/20 rounded-2xl border-dashed">
+                  <span className="material-symbols-outlined text-4xl text-outline-variant mb-2">task_alt</span>
+                  <p className="text-sm font-bold text-on-surface-variant">Dossiê Limpo</p>
+                  <p className="text-xs text-on-surface-variant/70">Nenhuma falta, atestado ou férias registrados recentemente.</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {viewingEmployee.bloqueios.map(bloq => (
+                    <div key={bloq.id} className="flex items-center justify-between bg-surface-container-lowest p-4 rounded-2xl border border-outline-variant/20 shadow-sm">
+                      <div className="flex items-center gap-4">
+                        <div className={`w-10 h-10 rounded-full flex items-center justify-center ${bloq.motivo.toLowerCase().includes('falta') ? 'bg-error/10 text-error' : 'bg-secondary-container text-secondary'}`}>
+                          <span className="material-symbols-outlined">{bloq.motivo.toLowerCase().includes('falta') ? 'person_off' : 'event_busy'}</span>
+                        </div>
+                        <div>
+                          <p className="text-sm font-bold text-on-surface">{bloq.motivo}</p>
+                          <p className="text-xs text-on-surface-variant mt-0.5">{bloq.horaInicio} às {bloq.horaFim}</p>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-xs font-bold uppercase tracking-widest text-on-surface">{bloq.data.split('-').reverse().join('/')}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
             </motion.div>
           </div>
         )}

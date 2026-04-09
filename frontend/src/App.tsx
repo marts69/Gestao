@@ -7,6 +7,8 @@ import { useAuth } from './AuthContext';
 import { LoginView } from './components/LoginView';
 import io from 'socket.io-client';
 import { getSocketUrl } from './config/api';
+import { analisarConformidadeCLT } from './utils/cltValidator';
+import { AuditorModal } from './components/AuditorModal';
 import { Employee, Appointment, Service, Client, TurnoSwapRequest, TurnoSwapStatus, ServiceEligibilityMode } from './types'; // Tipos mais fortes
 import {
   useAppointments, useAddAppointment, useCompleteAppointment, useReassignAppointment, useEditAppointment, useDeleteAppointment,
@@ -42,10 +44,14 @@ type ServicePayload = {
   modoElegibilidade?: ServiceEligibilityMode;
   cargosPermitidos?: string[];
   habilidadesPermitidas?: string[];
+  profissionaisPermitidos?: string[];
+  categoria?: string;
+  tempoHigienizacaoMin?: number | string;
+  comissaoPercentual?: number | string;
 };
 
 const normalizeEligibilityMode = (value: unknown): ServiceEligibilityMode => {
-  if (value === 'cargo' || value === 'habilidade' || value === 'livre') return value;
+  if (value === 'cargo' || value === 'habilidade' || value === 'profissional' || value === 'livre') return value;
   return 'livre';
 };
 
@@ -62,12 +68,18 @@ const normalizeServicePayload = (service: ServicePayload): { data?: Omit<Service
   const duracao = Number(service.duracao);
   const icone = typeof service.icone === 'string' ? service.icone.trim() : undefined;
   const descricao = typeof service.descricao === 'string' ? service.descricao.trim() : undefined;
+  const categoria = typeof service.categoria === 'string' ? service.categoria.trim() : undefined;
+  const tempoHigienizacaoMin = Number(service.tempoHigienizacaoMin) || 0;
+  const comissaoPercentual = service.comissaoPercentual !== undefined && service.comissaoPercentual !== '' && service.comissaoPercentual !== null ? Number(service.comissaoPercentual) : undefined;
   const modoElegibilidade = normalizeEligibilityMode(service.modoElegibilidade);
   const cargosPermitidos = modoElegibilidade === 'cargo'
     ? normalizeStringArray(service.cargosPermitidos)
     : [];
   const habilidadesPermitidas = modoElegibilidade === 'habilidade'
     ? normalizeStringArray(service.habilidadesPermitidas)
+    : [];
+  const profissionaisPermitidos = modoElegibilidade === 'profissional'
+    ? normalizeStringArray(service.profissionaisPermitidos)
     : [];
 
   if (!nome || nome.length < 3) {
@@ -94,12 +106,24 @@ const normalizeServicePayload = (service: ServicePayload): { data?: Omit<Service
     return { error: 'A descrição deve ter no máximo 500 caracteres.' };
   }
 
+  if (tempoHigienizacaoMin < 0 || !Number.isInteger(tempoHigienizacaoMin)) {
+    return { error: 'O tempo de higienização deve ser um número inteiro (maior ou igual a zero).' };
+  }
+
+  if (comissaoPercentual !== undefined && (Number.isNaN(comissaoPercentual) || comissaoPercentual < 0 || comissaoPercentual > 100)) {
+    return { error: 'A comissão deve ser um valor entre 0 e 100%.' };
+  }
+
   if (modoElegibilidade === 'cargo' && cargosPermitidos.length === 0) {
     return { error: 'Selecione ao menos um cargo para serviços com restrição por cargo.' };
   }
 
   if (modoElegibilidade === 'habilidade' && habilidadesPermitidas.length === 0) {
     return { error: 'Selecione ao menos uma habilidade para serviços com restrição por habilidade.' };
+  }
+
+  if (modoElegibilidade === 'profissional' && profissionaisPermitidos.length === 0) {
+    return { error: 'Selecione ao menos um profissional para serviços com restrição por profissional específico.' };
   }
 
   return {
@@ -112,6 +136,10 @@ const normalizeServicePayload = (service: ServicePayload): { data?: Omit<Service
       modoElegibilidade,
       cargosPermitidos,
       habilidadesPermitidas,
+      profissionaisPermitidos,
+      categoria: categoria || '',
+      tempoHigienizacaoMin,
+      comissaoPercentual,
     },
   };
 };
@@ -161,6 +189,7 @@ export default function App() {
 
   const [activeRoleView, setActiveRoleView] = useState<'supervisor' | 'collaborator' | 'tv'>('collaborator');
   const [showUpcomingAppointments, setShowUpcomingAppointments] = useState(false);
+  const [showAuditorModal, setShowAuditorModal] = useState(false);
 
   const hasUnauthorizedBootstrapError = useMemo(() => {
     const bootstrapErrors = [employeesError, appointmentsError, servicesError, clientsError];
@@ -275,6 +304,47 @@ export default function App() {
     };
   }, [token, queryClient]);
 
+  const staff = useMemo(() => {
+    // Otimização de Performance O(N): Agrupa serviços concluídos primeiro
+    const completedCounts = new Map<string, number>();
+    for (const app of appointments) {
+      if (app.status === 'completed') {
+        completedCounts.set(app.assignedEmployeeId, (completedCounts.get(app.assignedEmployeeId) || 0) + 1);
+      }
+    }
+    return employees.filter(e => e.id !== 'admin').map(emp => ({
+      ...emp,
+      completedServices: completedCounts.get(emp.id) || 0
+    }));
+  }, [employees, appointments]);
+
+  // Calcula alertas CLT globais para o sino no header
+  const cltRealtimeAlerts = useMemo(() => {
+    if (currentUser?.role !== 'supervisor') return [];
+    const referenceDate = getLocalTodayString();
+    
+    // Otimização O(N): Mapeia agendamentos por funcionário para validação CLT instantânea
+    const appsByEmp = new Map<string, Appointment[]>();
+    for (const app of appointments) {
+      if (!appsByEmp.has(app.assignedEmployeeId)) appsByEmp.set(app.assignedEmployeeId, []);
+      appsByEmp.get(app.assignedEmployeeId)!.push(app);
+    }
+
+    return staff.map(emp => {
+      const analise = analisarConformidadeCLT(
+        appsByEmp.get(emp.id) || [],
+        emp.bloqueios || [],
+        referenceDate
+      );
+      return {
+        id: emp.id,
+        nome: emp.name,
+        conforme: analise.statusGeral,
+        resumo: analise.resumo,
+      };
+    }).filter(item => !item.conforme);
+  }, [staff, appointments, currentUser]);
+
   // 2. SUBSTITUIÇÃO DAS FUNÇÕES DE CALLBACK PELAS MUTAÇÕES DO REACT QUERY
   // A lógica de 'fetch', 'try/catch', e 'setEstado' é abstraída para dentro dos hooks.
   // O componente apenas chama a função 'mutateAsync'. O 'onSuccess' nos hooks cuida da atualização da UI.
@@ -370,16 +440,6 @@ export default function App() {
     return replicateScaleDays(payload);
   };
 
-  const staff = useMemo(() => {
-    // Repassa todos (Colab e Super) para aparecerem, exceto o admin virtual
-    return employees.filter(e => e.id !== 'admin').map(emp => ({
-      ...emp,
-      completedServices: appointments.filter(
-        a => a.assignedEmployeeId === emp.id && a.status === 'completed'
-      ).length
-    }));
-  }, [employees, appointments]);
-
   if (!currentUser && isPublicTVMode) {
     return (
       <Suspense fallback={<ModuleLoading label="Carregando painel TV..." />}>
@@ -459,6 +519,8 @@ export default function App() {
       toggleTheme={toggleTheme}
       onOpenUpcomingAppointments={currentUser.role === 'supervisor' && activeRoleView === 'supervisor' ? () => setShowUpcomingAppointments(true) : undefined}
       upcomingAppointmentsCount={currentUser.role === 'supervisor' && activeRoleView === 'supervisor' ? upcomingAppointmentsCount : 0}
+      cltAlertsCount={currentUser.role === 'supervisor' && activeRoleView === 'supervisor' ? cltRealtimeAlerts.length : 0}
+      onOpenCltAlerts={() => setShowAuditorModal(true)}
     >
       {/* Trava de segurança final: exige que a função (role) real do banco seja supervisor */}
       <Suspense fallback={<ModuleLoading />}>
@@ -523,6 +585,18 @@ export default function App() {
             onClose={() => setShowUpcomingAppointments(false)}
           />
         </Suspense>
+      )}
+
+      {showAuditorModal && (
+        <AuditorModal
+          open={showAuditorModal}
+          alerts={cltRealtimeAlerts}
+          onClose={() => setShowAuditorModal(false)}
+          onResolve={(employeeId) => {
+            setShowAuditorModal(false);
+            window.dispatchEvent(new CustomEvent('quick-resolve-clt', { detail: { employeeId } }));
+          }}
+        />
       )}
     </Layout>
   );

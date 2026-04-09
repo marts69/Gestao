@@ -315,7 +315,10 @@ export function createRouter(io: Server) {
     for (const ag of agendamentosDia) {
        let durationAg = 0;
        if (ag.servicos && ag.servicos.length > 0) {
-         durationAg = ag.servicos.reduce((acc, s) => acc + (s.duracao || 60), 0);
+         durationAg = ag.servicos.reduce((acc, s) => {
+           const higienizacao = Number((s as any).tempoHigienizacaoMin || 0);
+           return acc + (s.duracao || 60) + higienizacao;
+         }, 0);
        } else {
          durationAg = 60;
        }
@@ -361,7 +364,7 @@ export function createRouter(io: Server) {
     });
 
     if (agAnterior) {
-      const duracaoAnterior = agAnterior.servicos.reduce((acc: number, s: any) => acc + (s.duracao || 60), 0) || 60;
+      const duracaoAnterior = agAnterior.servicos.reduce((acc: number, s: any) => acc + (s.duracao || 60) + (s.tempoHigienizacaoMin || 0), 0) || 60;
       const fimAnterior = addMinutes(agAnterior.data, duracaoAnterior);
       const horasDescanso = (dataNovaCapa.getTime() - fimAnterior.getTime()) / (1000 * 60 * 60);
       const diasDiferentes = fimAnterior.getDate() !== dataNovaCapa.getDate();
@@ -591,7 +594,7 @@ export function createRouter(io: Server) {
         await acquireAppointmentAdvisoryLock(tx, lockKey);
 
         const servicosSelecionados = await getServiceConnectionCandidates(tx, normalizedServiceNames);
-        const duracao = servicosSelecionados.reduce((total, servico) => total + (servico.duracao || 60), 0) || 60;
+        const duracao = servicosSelecionados.reduce((total, servico) => total + (servico.duracao || 60) + (servico.tempoHigienizacaoMin || 0), 0) || 60;
         const conflito = await verificarConflito(tx, collaboratorId, parsedDate, duracao);
         if (conflito) throw httpError(409, 'Conflito de agenda com outro apontamento.');
 
@@ -725,7 +728,7 @@ export function createRouter(io: Server) {
 
         const nomesServicos = normalizedServiceNames || agendamentoAtualTx.servicos.map((s: any) => s.nome);
         const servicosSelecionados = await getServiceConnectionCandidates(tx, nomesServicos);
-        const duracao = servicosSelecionados.reduce((total, servico) => total + (servico.duracao || 60), 0) || 60;
+        const duracao = servicosSelecionados.reduce((total, servico) => total + (servico.duracao || 60) + (servico.tempoHigienizacaoMin || 0), 0) || 60;
         const conflito = await verificarConflito(tx, finalColaboradorId, finalDate, duracao, id);
         if (conflito) throw httpError(409, 'Conflito de agenda. O horário coincide com outro compromisso.');
 
@@ -865,7 +868,7 @@ export function createRouter(io: Server) {
         const eligibilityError = await getEligibilityErrorForCollaborator(tx, colaboradorId, agendamentoAtualTx.servicos);
         if (eligibilityError) throw httpError(409, eligibilityError);
 
-        const duracao = agendamentoAtualTx.servicos.reduce((acc: number, servico: any) => acc + (servico.duracao || 60), 0) || 60;
+        const duracao = agendamentoAtualTx.servicos.reduce((acc: number, servico: any) => acc + (servico.duracao || 60) + (servico.tempoHigienizacaoMin || 0), 0) || 60;
         const conflito = await verificarConflito(tx, colaboradorId, agendamentoAtualTx.data, duracao, id);
         if (conflito) throw httpError(409, 'Conflito de agenda. O horário coincide com outro compromisso.');
 
@@ -932,7 +935,7 @@ export function createRouter(io: Server) {
         const eligibilityError = await getEligibilityErrorForCollaborator(tx, newEmployeeId, agendamentoAtualTx.servicos);
         if (eligibilityError) throw httpError(409, eligibilityError);
 
-        const duracao = agendamentoAtualTx.servicos.reduce((acc: number, servico: any) => acc + (servico.duracao || 60), 0) || 60;
+        const duracao = agendamentoAtualTx.servicos.reduce((acc: number, servico: any) => acc + (servico.duracao || 60) + (servico.tempoHigienizacaoMin || 0), 0) || 60;
         const conflito = await verificarConflito(tx, newEmployeeId, agendamentoAtualTx.data, duracao, id);
         if (conflito) throw httpError(409, 'Conflito de agenda. O horário coincide com outro compromisso.');
 
@@ -1056,9 +1059,13 @@ export function createRouter(io: Server) {
       preco: number;
       duracao: number;
       icone: string;
+      descricao: string;
       modoElegibilidade: 'livre' | 'cargo' | 'habilidade';
       cargosPermitidos: string[];
       habilidadesPermitidas: string[];
+      categoria: string;
+      tempoHigienizacaoMin: number;
+      comissaoPercentual: number | null;
     };
     erro?: string;
   } => {
@@ -1067,6 +1074,9 @@ export function createRouter(io: Server) {
     const duracao = Number(payload?.duracao);
     const icone = typeof payload?.icone === 'string' ? payload.icone.trim() : '';
     const descricao = typeof payload?.descricao === 'string' ? payload.descricao.trim() : '';
+    const categoria = typeof payload?.categoria === 'string' ? payload.categoria.trim() : '';
+    const tempoHigienizacaoMin = Number(payload?.tempoHigienizacaoMin) || 0;
+    const comissaoPercentual = payload?.comissaoPercentual !== undefined && payload?.comissaoPercentual !== null && payload?.comissaoPercentual !== '' ? Number(payload.comissaoPercentual) : null;
     const modoElegibilidade = normalizeEligibilityMode(payload?.modoElegibilidade);
     const cargosPermitidos = modoElegibilidade === 'cargo'
       ? normalizeStringArray(payload?.cargosPermitidos)
@@ -1113,9 +1123,13 @@ export function createRouter(io: Server) {
         preco,
         duracao,
         icone: icone || 'spa',
+        descricao,
         modoElegibilidade,
         cargosPermitidos,
         habilidadesPermitidas,
+        categoria,
+        tempoHigienizacaoMin,
+        comissaoPercentual,
       },
     };
   };

@@ -1,7 +1,7 @@
 export type Role = 'collaborator' | 'supervisor';
 export type TipoEscala = '6x1' | '5x1' | '5x2' | '12x36' | 'rotativo' | 'personalizado';
 export type TurnoSwapStatus = 'pendente' | 'aprovada' | 'rejeitada';
-export type ServiceEligibilityMode = 'livre' | 'cargo' | 'habilidade';
+export type ServiceEligibilityMode = 'livre' | 'cargo' | 'habilidade' | 'profissional';
 
 export interface Bloqueio {
   id: string;
@@ -56,6 +56,10 @@ export interface Service {
   modoElegibilidade?: ServiceEligibilityMode;
   cargosPermitidos?: string[];
   habilidadesPermitidas?: string[];
+  profissionaisPermitidos?: string[];
+  categoria?: string;
+  tempoHigienizacaoMin?: number;
+  comissaoPercentual?: number;
 }
 
 export interface Client {
@@ -64,6 +68,8 @@ export interface Client {
   telefone: string;
   cpf?: string;
   observacao?: string;
+  alergias?: string[];
+  preferencias?: string[];
 }
 
 export interface TurnoSwapRequest {

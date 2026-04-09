@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { motion } from 'motion/react';
 import { Employee, TurnoSwapStatus } from '../../../types';
 import { type DiaEscala } from '../../../utils/escalaCalculator';
@@ -14,6 +14,7 @@ interface SupervisorPlanejamentoTabProps {
 export function SupervisorPlanejamentoTab(props: SupervisorPlanejamentoTabProps) {
   const {
     employees,
+    appointments,
     filterRole,
     setFilterRole,
     changeScaleMonthBy,
@@ -81,6 +82,45 @@ export function SupervisorPlanejamentoTab(props: SupervisorPlanejamentoTabProps)
     handleGenerateScale,
     setSelectedScaleEmployeeId,
   } = props;
+
+  // Estados da Edição em Lote (Bulk Edit)
+  const [isBatchEditOpen, setIsBatchEditOpen] = useState(false);
+  const [batchSelectedIds, setBatchSelectedIds] = useState<string[]>([]);
+  const [batchTargetDate, setBatchTargetDate] = useState<string>('');
+  const [batchShiftType, setBatchShiftType] = useState<'trabalho' | 'folga' | 'fds'>('trabalho');
+  const [batchShiftTurno, setBatchShiftTurno] = useState<string>('08:00-18:00');
+  const [batchShiftDescricao, setBatchShiftDescricao] = useState<string>('Edição em lote');
+  const [isApplyingBatch, setIsApplyingBatch] = useState(false);
+
+  const handleApplyBatch = async () => {
+    if (!batchTargetDate || batchSelectedIds.length === 0) return;
+    setIsApplyingBatch(true);
+    try {
+      // Otimista: atualiza a interface instantaneamente
+      setPlanningOverrides((prev: any) => {
+        const next = { ...prev };
+        batchSelectedIds.forEach((empId) => {
+          next[`${empId}:${batchTargetDate}`] = {
+            colaboradorId: empId, data: batchTargetDate, tipo: batchShiftType,
+            turno: batchShiftType === 'trabalho' ? batchShiftTurno : undefined,
+            descricao: batchShiftDescricao,
+          };
+        });
+        return next;
+      });
+
+      // Dispara a mutação para cada funcionário selecionado
+      if (onSaveScaleOverride) {
+        for (const empId of batchSelectedIds) {
+          try { await onSaveScaleOverride({ colaboradorId: empId, data: batchTargetDate, tipo: batchShiftType, turno: batchShiftType === 'trabalho' ? batchShiftTurno : undefined, descricao: batchShiftDescricao }); } catch (e) { console.error(e); }
+        }
+      }
+
+      setToastMessage(`Lote aplicado para ${batchSelectedIds.length} colaboradores!`);
+      setIsBatchEditOpen(false);
+      setBatchSelectedIds([]);
+    } catch (error) { setToastMessage('Erro ao aplicar edição em lote.'); } finally { setIsApplyingBatch(false); }
+  };
 
   return (
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="relative flex flex-col gap-6 items-start w-full">
@@ -222,6 +262,15 @@ export function SupervisorPlanejamentoTab(props: SupervisorPlanejamentoTabProps)
                     className="h-11 px-5 bg-primary text-on-primary rounded-xl text-xs font-bold uppercase tracking-wider hover:bg-primary-dim transition-all shadow-sm"
                   >
                     + Nova Escala
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setIsBatchEditOpen(true)}
+                    className="h-11 px-5 rounded-xl border border-outline-variant/20 bg-surface-container text-on-surface-variant text-xs font-bold uppercase tracking-wider hover:border-primary/40 hover:text-primary transition-all shadow-sm flex items-center gap-1.5"
+                  >
+                    <span className="material-symbols-outlined text-[16px]">checklist</span>
+                    Edição em Lote
                   </button>
 
                   <button
@@ -438,6 +487,7 @@ export function SupervisorPlanejamentoTab(props: SupervisorPlanejamentoTabProps)
                 {planningViewMode === 'timeline' && (
                   <TimelineGantt
                     employees={timelineEmployees}
+                    appointments={appointments}
                     month={selectedScaleMonth}
                     hideMonthBadge
                     isEditable={isPlanningEditMode}
@@ -799,6 +849,83 @@ export function SupervisorPlanejamentoTab(props: SupervisorPlanejamentoTabProps)
                     {isSavingPlanning ? 'Gerando...' : 'Gerar Escala'}
                   </button>
                 </div>
+              </div>
+            </div>
+          )}
+
+          {isBatchEditOpen && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+              <button
+                type="button"
+                className="absolute inset-0 bg-black/55 backdrop-blur-[1px]"
+                onClick={() => setIsBatchEditOpen(false)}
+                aria-label="Fechar modal"
+              />
+
+              <div className="relative w-full max-w-md rounded-3xl border border-outline-variant/20 bg-surface-container shadow-2xl p-6 flex flex-col max-h-[90vh]">
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-xl font-headline text-on-surface">Edição em Lote</h2>
+                  <button onClick={() => setIsBatchEditOpen(false)} className="p-2 rounded-full hover:bg-surface-container-high text-on-surface-variant transition-colors">
+                    <span className="material-symbols-outlined text-[20px]">close</span>
+                  </button>
+                </div>
+
+                <div className="mb-4">
+                  <label className="block text-[10px] font-bold uppercase tracking-[0.15em] text-on-surface-variant mb-2">Data Alvo</label>
+                  <input type="date" value={batchTargetDate} onChange={e => setBatchTargetDate(e.target.value)} className="w-full h-11 px-3 rounded-xl bg-surface-container-low border border-outline-variant/20 text-sm text-on-surface focus:outline-none focus:ring-1 focus:ring-primary" />
+                </div>
+
+                <div className="flex justify-between items-center mb-2">
+                  <label className="block text-[10px] font-bold uppercase tracking-[0.15em] text-on-surface-variant">Colaboradores ({batchSelectedIds.length})</label>
+                  <button onClick={() => setBatchSelectedIds(batchSelectedIds.length === timelineEmployees.length ? [] : timelineEmployees.map((e: any) => e.id))} className="text-[10px] font-bold uppercase tracking-wider text-primary hover:text-primary-dim transition-colors">
+                    {batchSelectedIds.length === timelineEmployees.length ? 'Desmarcar Todos' : 'Marcar Todos'}
+                  </button>
+                </div>
+                <div className="max-h-48 overflow-y-auto mb-4 border border-outline-variant/20 bg-surface-container-low rounded-xl p-2 custom-scrollbar">
+                   {timelineEmployees.map((emp: any) => (
+                     <label key={emp.id} className="flex items-center gap-3 p-2 hover:bg-surface-container rounded-lg cursor-pointer transition-colors">
+                       <input type="checkbox" checked={batchSelectedIds.includes(emp.id)} onChange={() => {
+                         setBatchSelectedIds(prev => prev.includes(emp.id) ? prev.filter(id => id !== emp.id) : [...prev, emp.id]);
+                       }} className="w-4 h-4 rounded border-outline-variant/30 text-primary focus:ring-primary bg-surface-container-lowest" />
+                       <span className="text-sm font-medium text-on-surface">{emp.name}</span>
+                     </label>
+                   ))}
+                </div>
+
+                <div className="grid grid-cols-2 gap-4 mb-4">
+                  <div>
+                    <label className="block text-[10px] font-bold uppercase tracking-[0.15em] text-on-surface-variant mb-2">Ação</label>
+                    <select value={batchShiftType} onChange={e => setBatchShiftType(e.target.value as any)} className="w-full h-11 px-3 rounded-xl bg-surface-container-low border border-outline-variant/20 text-sm text-on-surface focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer">
+                      <option value="trabalho">Trabalho</option>
+                      <option value="folga">Folga</option>
+                      <option value="fds">FDS</option>
+                    </select>
+                  </div>
+                  {batchShiftType === 'trabalho' && (
+                    <div>
+                      <label className="block text-[10px] font-bold uppercase tracking-[0.15em] text-on-surface-variant mb-2">Turno</label>
+                      <select value={batchShiftTurno} onChange={e => setBatchShiftTurno(e.target.value)} className="w-full h-11 px-3 rounded-xl bg-surface-container-low border border-outline-variant/20 text-sm text-on-surface focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer">
+                        <option value="06:00-14:00">Manhã (06h - 14h)</option>
+                        <option value="08:00-18:00">Comercial (08h - 18h)</option>
+                        <option value="14:00-22:00">Tarde (14h - 22h)</option>
+                        <option value="22:00-06:00">Noite (22h - 06h)</option>
+                      </select>
+                    </div>
+                  )}
+                </div>
+
+                <div className="mb-6">
+                  <label className="block text-[10px] font-bold uppercase tracking-[0.15em] text-on-surface-variant mb-2">Motivo/Descrição</label>
+                  <input type="text" value={batchShiftDescricao} onChange={e => setBatchShiftDescricao(e.target.value)} className="w-full h-11 px-3 rounded-xl bg-surface-container-low border border-outline-variant/20 text-sm text-on-surface focus:outline-none focus:ring-1 focus:ring-primary" placeholder="Ex: Ajuste coletivo, Feriado..." />
+                </div>
+
+                <button
+                  onClick={handleApplyBatch}
+                  disabled={batchSelectedIds.length === 0 || !batchTargetDate || isApplyingBatch}
+                  className="w-full h-11 bg-primary text-on-primary rounded-xl font-bold uppercase tracking-wider hover:bg-primary-dim transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center shadow-sm"
+                >
+                  {isApplyingBatch ? 'Aplicando Lote...' : 'Aplicar em Lote'}
+                </button>
               </div>
             </div>
           )}

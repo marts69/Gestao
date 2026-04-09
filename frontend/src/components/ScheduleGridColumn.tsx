@@ -140,11 +140,16 @@ export const EmployeeScheduleColumn = React.memo(({ emp }: EmployeeScheduleColum
       onDrop={(event) => {
         void handleDropOnColumn(event);
       }}
-      className={`flex-1 min-w-[220px] border-r border-outline-variant/10 relative transition-colors ${isUnavailable ? 'cursor-not-allowed bg-error/5' : 'cursor-pointer hover:bg-primary/5'}`}
+      className={`flex-1 min-w-[220px] border-r border-outline-variant/10 relative transition-colors overflow-hidden ${isUnavailable ? 'cursor-not-allowed bg-surface-variant/20 bg-[repeating-linear-gradient(-45deg,transparent,transparent_5px,rgba(0,0,0,0.03)_5px,rgba(0,0,0,0.03)_10px)] dark:bg-[repeating-linear-gradient(-45deg,transparent,transparent_5px,rgba(255,255,255,0.02)_5px,rgba(255,255,255,0.02)_10px)]' : 'cursor-pointer hover:bg-primary/5'}`}
       style={{ height: (endHour - startHour + 1) * hourHeight }}
     >
       {isUnavailable && (
-        <div className="absolute inset-0 pointer-events-none z-0 border border-error/10"></div>
+        <div className="absolute inset-0 pointer-events-none z-0 flex flex-col items-center justify-center opacity-30 grayscale">
+           <div className="sticky top-1/2 -translate-y-1/2 flex flex-col items-center justify-center text-on-surface-variant">
+             <span className="material-symbols-outlined text-4xl mb-2">event_busy</span>
+             <span className="text-xs font-bold uppercase tracking-widest bg-surface-container/80 px-3 py-1 rounded-full shadow-sm backdrop-blur-sm border border-outline-variant/20">Profissional Indisponível</span>
+           </div>
+        </div>
       )}
 
       {empBlockers.map((bloq) => {

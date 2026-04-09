@@ -399,6 +399,398 @@ Manutenibilidade: 60% → ~84% (em progresso para 95%)
 
 ---
 
+## 🧾 Fechamento de Hoje (07/04/2026) - Diretriz Premium para a Aba de Serviços
+
+### Resumo Detalhado (Produto + UX + Regra de Negócio)
+- A base atual de Serviços está funcional, porém o próximo salto de qualidade deve focar em percepção premium de produto e aderência operacional de Spa.
+- O objetivo da próxima iteração é transformar a aba em um módulo de catálogo profissional: visual de alto padrão, cadastro orientado a operação real (tempo de preparo, comissão e categorização) e listagem em formato de cards para edição rápida.
+
+#### 1) Ajustes Rápidos (pulo do gato visual)
+- Revisar acentuação e microcopy em toda a tela para elevar percepção de acabamento:
+  1. `Servicos` -> `Serviços`
+  2. `Duracoes` -> `Durações`
+  3. `Icone` -> `Ícone`
+  4. `Preco` -> `Preço`
+- Melhorar Empty State da coluna esquerda com ícone temático (spa/wellness) + mensagem orientativa:
+  1. Título: `Seu menu de serviços está vazio.`
+  2. Subtítulo: `Adicione seu primeiro tratamento utilizando o painel ao lado.`
+- Aumentar contraste e separação do painel direito (área de ação) com fundo levemente distinto e/ou borda lateral para reforçar hierarquia visual.
+
+#### 2) Turbinar Formulário (regra de negócio de Spa)
+- Incluir `Categoria do Serviço` via dropdown (Massagens, Estética Facial, Banhos, Day Spa etc.) para suportar filtros de recepção e visão gerencial.
+- Incluir `Tempo de Preparo/Higienização (min)` além da duração principal:
+  1. Exemplo operacional: serviço de 60 min + preparo de 15 min = bloqueio total de 75 min na agenda.
+  2. Resultado esperado: redução de sobreposição indevida e atraso em cadeia.
+- Incluir `Comissão Padrão (%)` no serviço para fechamento financeiro mensal (profissionais autônomos/comissionados).
+
+#### 3) Exibição dos serviços salvos (coluna esquerda)
+- Substituir listagem textual simples por cards clicáveis com semântica de catálogo premium:
+  1. Ícone escolhido em container circular suave.
+  2. Nome do tratamento em destaque.
+  3. Categoria em texto secundário.
+  4. À direita: preço formatado em BRL + tag de duração total (`⏱️ 60 min`).
+- O card deve abrir o serviço no painel direito para edição direta (fluxo de produtividade).
+
+### Checklist de Ação para Código (Aba Serviços Premium)
+- [x] Revisão Ortográfica: aplicar acentuação em labels, títulos e placeholders (`Serviços`, `Durações`, `Ícone`, `Preço`).
+- [x] Melhorar Empty State: adicionar ícone SVG + título/subtítulo orientativo na coluna esquerda.
+- [x] Adicionar Campo Categoria: criar `<select>` com categorias pré-definidas de Spa.
+- [x] Adicionar Campo Tempo de Higienização: criar `<input type="number">` separado da duração principal.
+- [x] Adicionar Campo Comissão Padrão (%): criar `<input type="number">` com limites e validação de faixa.
+- [x] Refinar Elegibilidade Específica: ao escolher modo específico, renderizar seletor múltiplo de profissionais habilitados (ex.: Ana/Marcos).
+- [x] Evoluir Lista para Cards: renderizar cards clicáveis com ícone, nome, categoria, preço e duração.
+- [x] Integrar ao Agendamento: considerar `duração + higienização` no cálculo de bloqueio total de agenda.
+- [x] Validar Regressão: executar `npm run lint` + `npm run build` após implementação da nova modelagem.
+
+### 🚀 Mega Sprint (08/04/2026) - Integração, Clientes e Dívida Técnica
+- [x] **Opção 3 (Tech Debt):** Refatoração de performance ($O(N)$) nas listas de `App.tsx` e `SupervisorView.tsx`.
+- [x] **Opção 1 & 2 (Fundações):** Interfaces ricas de Cliente adicionadas em `types.ts` e exportação do motor de escala para a Aba de Agenda.
+- [x] **Opção 1 (Visual):** Renderizar bloqueios da escala diretamente nas colunas de agendamento (listras de isolamento).
+- [x] **Opção 2 (Visual):** Refatorar aba de Clientes com métricas (No-Shows), histórico e Perfil Clínico (Alergias).
+
+### Milestones de Execução (prioridade operacional)
+
+#### P0 - Base funcional e risco operacional (entrega imediata)
+- [x] Revisão ortográfica completa na aba Serviços (labels, placeholders, títulos e mensagens).
+- [x] Campo `Categoria` no formulário com opções iniciais de negócio de Spa.
+- [x] Campo `Tempo de Higienização` no formulário com validação numérica.
+- [x] Campo `Comissão Padrão (%)` com validação de faixa e tratamento de valor vazio.
+- [ ] Ajuste de regra de agenda para considerar `duração + higienização` no bloqueio total.
+- [ ] Regressão técnica obrigatória (`npm run lint` + `npm run build`).
+- Critério de aceite P0: cadastro/edição funcionando fim a fim, sem quebra de tipagem e sem sobreposição indevida de agendamentos.
+
+#### P1 - Experiência premium e produtividade da recepção
+- [x] Empty State premium com ícone temático + copy orientativa na coluna esquerda.
+- [x] Contraste/recorte visual do painel direito como área de ação.
+- [x] Evolução de listagem para `Cards de Serviço` (ícone, nome, categoria, preço e duração total).
+- [x] Click-to-edit no card abrindo dados no painel direito.
+- Critério de aceite P1: leitura visual instantânea do catálogo e redução de cliques para editar serviço.
+
+#### P2 - Elegibilidade avançada e governança de execução
+- [x] Elegibilidade específica com seletor múltiplo condicional por profissional habilitado.
+- [x] Revisão de microinterações e estados (loading, erro, sucesso, vazio) para consistência de UX.
+- [x] Consolidação da documentação de uso operacional da aba Serviços no material de fechamento.
+- Critério de aceite P2: operador consegue restringir execução por equipe sem ambiguidade e sem regressão de usabilidade.
+
+### Dependências e Ordem de Implementação
+- [ ] Implementar P0 antes de P1 (P1 depende da modelagem final de formulário).
+- [ ] Implementar P1 antes de P2 (P2 depende da estrutura visual/listagem estabilizada).
+- [ ] Publicar versão alpha incremental após cada milestone concluído com resumo `adicionado` + `corrigido`.
+
+### Quebra Técnica P0 por Arquivo (plano direto de execução)
+
+#### Frontend - Tela de Serviços
+- [ ] `frontend/src/features/services/components/SupervisorServicosTab.tsx`
+  1. Corrigir acentuação de labels, títulos, placeholders e mensagens de feedback.
+  2. Inserir campo `Categoria` (`<select>` com opções de Spa).
+  3. Inserir campo `Tempo de Higienização (min)` com validação de inteiro >= 0.
+  4. Inserir campo `Comissão Padrão (%)` com validação de faixa (0 a 100).
+  5. Atualizar payload de create/update para enviar os novos campos.
+
+#### Frontend - Contratos e camada de dados
+- [ ] `frontend/src/types.ts`
+  1. Estender tipo `Service` com `categoria`, `tempoHigienizacaoMin`, `comissaoPercentual`.
+- [ ] `frontend/src/api.ts`
+  1. Normalizar parse dos novos campos em leitura/escrita.
+  2. Garantir fallback seguro para dados legados (quando campo não existir).
+
+#### Backend - Modelo e validações
+- [ ] `prisma/schema.prisma`
+  1. Adicionar colunas para `categoria`, `tempoHigienizacaoMin`, `comissaoPercentual` no modelo de serviços.
+- [ ] `prisma/migrations/*`
+  1. Criar migration para os novos campos com defaults compatíveis para base existente.
+- [ ] `backend/routes.ts`
+  1. Validar entrada dos novos campos (tipo, faixa e obrigatoriedade por regra de negócio).
+  2. Persistir e retornar os campos em create/update/list sem quebrar consumidores atuais.
+
+#### Regras de agenda (impacto operacional)
+- [ ] `frontend/src/features/appointments/utils/appointmentCore.ts`
+  1. Ajustar cálculo de duração total para considerar `duração + higienização`.
+- [ ] `backend/routes.ts`
+  1. Ajustar cálculo de conflito para considerar duração efetiva total do serviço.
+  2. Revalidar mensagens de conflito para refletir bloqueio operacional real.
+
+#### Validação técnica de fechamento P0
+- [ ] `npm run lint`
+- [ ] `node ./node_modules/typescript/bin/tsc --noEmit -p tsconfig.json`
+- [ ] `npm --prefix frontend run build`
+- [ ] Smoke manual: criar serviço com higienização e confirmar bloqueio real no agendamento.
+
+### Tickets de Execução (Amanhã - 08/04/2026)
+
+#### Sprint P0 - Aba Serviços Premium (estimativa total: 8h a 12h)
+- [ ] **P0.1 - Contrato de dados e tipagem (1h a 1.5h)**
+  1. Estender tipo `Service` com `categoria`, `tempoHigienizacaoMin`, `comissaoPercentual`.
+  2. Ajustar parse/normalização na camada de API para aceitar legado sem quebra.
+  3. Arquivos alvo: `frontend/src/types.ts`, `frontend/src/api.ts`.
+
+- [ ] **P0.2 - Formulário de Serviços (2h a 3h)**
+  1. Inserir campos `Categoria`, `Tempo de Higienização`, `Comissão (%)`.
+  2. Aplicar validações de faixa/tipo e revisão ortográfica completa da aba.
+  3. Garantir payload de create/update com os novos campos.
+  4. Arquivo alvo: `frontend/src/features/services/components/SupervisorServicosTab.tsx`.
+
+- [ ] **P0.3 - Backend: schema + migration + rotas (2h a 3h)**
+  1. Atualizar modelo Prisma para novos campos de serviço.
+  2. Criar migration com defaults compatíveis para base existente.
+  3. Validar/persistir novos campos em create/update/list nas rotas.
+  4. Arquivos alvo: `prisma/schema.prisma`, `prisma/migrations/*`, `backend/routes.ts`.
+
+- [ ] **P0.4 - Regras de agenda com duração efetiva (1h a 2h)**
+  1. Ajustar cálculo de duração para `duração + higienização` no frontend.
+  2. Ajustar conflito de agenda no backend com mesma regra.
+  3. Revisar mensagens de conflito para refletir tempo operacional real.
+  4. Arquivos alvo: `frontend/src/features/appointments/utils/appointmentCore.ts`, `backend/routes.ts`.
+
+- [ ] **P0.5 - QA técnico e smoke de operação (1h a 1.5h)**
+  1. Rodar `npm run lint`.
+  2. Rodar `node ./node_modules/typescript/bin/tsc --noEmit -p tsconfig.json`.
+  3. Rodar `npm --prefix frontend run build`.
+  4. Executar smoke manual: cadastrar serviço com higienização e validar bloqueio total na agenda.
+
+#### Ordem recomendada de execução (amanhã)
+- [ ] Manhã: `P0.1` -> `P0.2` -> início de `P0.3`.
+- [ ] Tarde: finalizar `P0.3` -> `P0.4` -> `P0.5`.
+- [ ] Publicar versão alpha no fim do dia com resumo `adicionado` e `corrigido`.
+
+### Riscos e Mitigações por Ticket (P0)
+
+#### P0.1 - Contrato de dados e tipagem
+- Risco principal: quebra de compatibilidade com payload legado (serviços antigos sem os novos campos).
+- Impacto: erro de parse no frontend e regressão silenciosa de listagem/edição.
+- Mitigação preventiva: fallback defensivo na normalização (`null`/default) e tipagem opcional controlada na camada de API.
+- Plano de contingência: feature flag temporária para exibir campos novos sem obrigatoriedade de persistência até concluir migration.
+
+#### P0.2 - Formulário de Serviços
+- Risco principal: validações inconsistentes entre UI e backend (frontend aceita valor que backend rejeita).
+- Impacto: fricção operacional e retrabalho da recepção/gestão.
+- Mitigação preventiva: espelhar as mesmas faixas e mensagens de erro nas duas camadas.
+- Plano de contingência: bloquear submit no frontend com validação sincrônica e exibir erro de domínio unificado.
+
+#### P0.3 - Backend: schema + migration + rotas
+- Risco principal: migration impactar base existente com dados antigos e causar erro em produção/local.
+- Impacto: indisponibilidade parcial do CRUD de serviços.
+- Mitigação preventiva: usar defaults seguros, tornar campos inicialmente opcionais e validar migração em base de teste antes de aplicar na principal.
+- Plano de contingência: rollback da migration + script de backfill (preenchimento padrão) para restaurar operação imediatamente.
+
+#### P0.4 - Regras de agenda com duração efetiva
+- Risco principal: divergência de cálculo entre frontend e backend para duração total (duração + higienização).
+- Impacto: conflito fantasma ou agendamento encavalado.
+- Mitigação preventiva: centralizar fórmula de cálculo e validar cenários-limite (fronteira de horário e múltiplos serviços).
+- Plano de contingência: manter backend como fonte de verdade e ajustar frontend para apenas refletir decisão do servidor.
+
+#### P0.5 - QA técnico e smoke operacional
+- Risco principal: validação incompleta cobrir só casos felizes.
+- Impacto: bug entrar em produção mesmo com `lint/build` verdes.
+- Mitigação preventiva: smoke orientado a risco (caso de conflito, caso de legado e caso de borda de horário).
+- Plano de contingência: checklist de rollback rápido (reverter commit da feature + manter versão alpha anterior estável).
+
+### Checklist de Mitigação (go/no-go do dia)
+- [ ] Confirmar fallback de dados legados ativo antes do deploy local.
+- [ ] Confirmar migration validada em base de teste com snapshot.
+- [ ] Confirmar cálculo de duração total idêntico entre frontend/backend.
+- [ ] Confirmar smoke com cenários de erro e borda, não apenas fluxo feliz.
+- [ ] Confirmar estratégia de rollback pronta antes do push final.
+
+---
+
+## 🎨 FASE 4: UI/UX Premium Escalas (07/04/2026)
+
+**Objetivo:** Reduzir a fadiga cognitiva do supervisor na malha de planejamento, melhorando o contraste, hierarquia da informação e a identificação visual rápida (sem necessidade de leitura de textos).
+
+### Checklist de Implementações Pendentes
+- [x] **1. Contraste de Folgas/FDS:** Substituir o fundo cinza sutil por riscas diagonais escuras (`repeating-linear-gradient`) e aplicar fonte branca sólida no texto "FOLGA", garantindo contraste instantâneo.
+- [x] **2. Destaque de "HOJE":** Adicionar um rótulo explícito e destacado com o texto `"HOJE"` no cabeçalho do cartão do dia atual na malha e no título do Popover.
+- [x] **3. Preenchimentos Sólidos (Turnos):** Substituir as cores pastel (10% opacidade) por cores sólidas e fortes nos cartões de turnos (ex: `bg-blue-600 text-white`), permitindo escanear a grade rapidamente.
+- [x] **4. Ícones Simbólicos de Turno:** Injetar condicionalmente ícones do Material Symbols (ex: `light_mode` para Tarde, `dark_mode` para Noite, `routine` para Comercial) com base no horário de início do turno.
+- [x] **5. Consistência na TimelineGantt:** Aplicar o mesmo padrão visual (riscas para folgas, cores sólidas, ícones e selo "HOJE") na linha do tempo.
+
+### Checklist de UX/UI para Edição de Dia (`PlanningDayPopover.tsx`)
+- [x] **6. Limpeza do Cabeçalho:** Unificar a data no modal (apenas título "Editar Escala" com subtítulo limpo da data), removendo as três formatações repetidas.
+- [x] **7. Dropdown de Turno Condicional:** Exibir a caixa de seleção de turnos *apenas* se o status "Trabalho" for escolhido.
+- [x] **8. Segmented Control e Ícones Limpos:** Trocar os botões isolados e emojis de WhatsApp (🏖️) por um *Segmented Control* profissional (Trabalho | Folga | Férias | Atestado) usando ícones do Lucide.
+- [x] **9. Refinamentos (Espaçamento e Textos):** Corrigir "sera" para "será", dar destaque ao aviso com ícone (ℹ️), aumentar a margem de "Observações" e transformar o "Cancelar" em um *Outline Button*.
+
+### O que já foi feito nesta frente
+- [x] **Alertas CLT e Popover Aprimorado:** Estrutura visual do alerta implementada (`bg-error/10 border-error/20 text-error` com ícone de alerta), além de legendas independentes no rodapé (`CalendarioEscala.tsx`).
+
+---
+
+## 🏢 FASE 5: Enterprise & Compliance Avançado (Inovação PMS)
+
+**Objetivo:** Elevar o sistema a um patamar de PMS (Property Management System) de alto nível com automações de compliance, auditoria em tempo real e gamificação da gestão.
+
+### Checklist de Novas Funcionalidades
+- [x] **1. Sino de Alertas CLT (Auditor Silencioso):** Criar um ícone de sino global no Header com contador de alertas vermelho/amarelo. Ao clicar, abrir um dropdown listando infrações priorizadas (Interjornada inferior a 11h, 7º dia sem folga, Regra do Domingo, Limite de 44h).
+- [x] **2. UX "Quick Fix" nos Alertas:** Adicionar ação nos itens do dropdown do sino que, ao clicar, faz scroll automático e pisca/destaca a célula exata na malha da escala onde o erro ocorre, agilizando a correção.
+- [x] **3. Fluxo Completo de Troca de Turnos:** Implementar as telas para o fluxo de 3 vias na troca de turnos: Colaborador A solicita -> Colaborador B aceita no celular dele -> Supervisor aprova -> A escala da empresa se ajusta automaticamente. (Aprovada a simplificação para 2 vias).
+- [x] **4. "Health Score" da Escala:** Criar um medidor gamificado (nota de 0 a 100) no Dashboard de Escalas. A nota começa em 100 e perde pontos por quebras de regras CLT ou baixa cobertura diária.
+- [x] **5. Mapa de Calor Dinâmico (Demanda real vs Cobertura):** Integrar a métrica de "Cobertura Diária" com a carga de trabalho na Agenda. Se os agendamentos excederem a capacidade do número de funcionários ativos no dia, exibir alerta crítico de "Gargalo Operacional".
+- [x] **6. Etiquetas Inteligentes (Tags/Skills):** Permitir tags customizadas nos perfis (ex: `[Primeiros Socorros]`, `[Bilíngue - Inglês]`) e criar alertas para garantir que o spa nunca fique desguarnecido de profissionais com essas tags vitais num turno.
+
+---
+
+## 📺 FASE 6: Painel TV (Experiência do Cliente)
+
+**Objetivo:** Transformar a tela de espera do Spa em uma ferramenta de encantamento, respeitando a privacidade e a atmosfera relaxante do ambiente.
+
+### Checklist de UX/UI para Painel TV (`TVPanelView.tsx`)
+- [x] **1. Estado Vazio Rico:** Exibir credenciais de Wi-Fi e um QR Code elegante apontando para o Cardápio Digital de chás/serviços enquanto não há chamadas.
+- [x] **2. Aura de Spa (Visual):** Adicionar um fundo animado sutil (vídeo em loop escurecido, ex: água ou bambu) e um letreiro rodapé (ticker) com dicas de bem-estar.
+- [x] **3. Privacidade de Dados:** Ofuscar os sobrenomes dos clientes na lista de chamadas (ex: "Maria S.", "João P.").
+- [x] **4. Estrutura e Destaque:** Organizar em colunas claras (Horário | Cliente | Serviço | Sala) e destacar a linha do "Próximo" (chamada atual) com um fundo translúcido e pulso suave.
+- [x] **5. Aviso Sonoro Imersivo:** Implementar um som de notificação suave (ex: sino tibetano ou taça de cristal) ao chamar o próximo cliente, fugindo de sons corporativos/hospitalares.
+
+---
+
+## 👥 FASE 7: Módulo de RH e Perfil do Colaborador
+
+**Objetivo:** Criar um ambiente dedicado e escalável para gestão de recursos humanos, substituindo modais complexos por perfis individuais detalhados e estruturando o motor de validação CLT.
+
+### Checklist Fase 1: Estrutura e Página Dedicada
+- [x] **1. Estrutura de Rotas (Páginas):** Migrar a gestão individual de modais para páginas dedicadas (ex: `/gestao-equipe` e `/gestao-equipe/colaborador/[id]`). (Implementado via Modal Rico no próprio Supervisor).
+- [x] **2. Visão Completa de Perfil (Tabs):** Desenvolver a tela do colaborador com cabeçalho (Breadcrumb, Foto, Status) e sistema de abas internas: *Dados Pessoais*, *Regras de Jornada* e *Histórico/Ocorrências*.
+- [x] **3. Alertas Locais no Perfil:** Renderizar banners de contexto de RH (ex: férias vencendo, banco de horas) diretamente abaixo do nome na página do colaborador.
+- [x] **4. Exibição de Ocorrências:** Listar o histórico iterando sobre os bloqueios atuais:
+  ```typescriptreact
+  viewingEmployee.bloqueios
+  ```
+
+**💻 Exemplo de Código (Página do Colaborador com Abas e Alerta):**
+```typescriptreact
+import { useState } from 'react';
+
+// Tipagem básica
+interface Colaborador {
+  id: number;
+  nome: string;
+  cargo: string;
+  alertaLocal?: string;
+}
+
+export default function PerfilColaborador() {
+  const [abaAtiva, setAbaAtiva] = useState<'dados' | 'jornada'>('dados');
+  
+  // Exemplo de dados vindo do banco
+  const colaborador: Colaborador = {
+    id: 1,
+    nome: "Ana Luiza",
+    cargo: "Yoga & Meditação",
+    alertaLocal: "Atenção: Banco de horas próximo do limite (38h)."
+  };
+
+  return (
+    <div className="p-6 bg-[#121212] min-h-screen text-gray-200">
+      {/* Cabeçalho */}
+      <div className="mb-6 border-b border-gray-700 pb-4">
+        <h1 className="text-2xl font-semibold text-emerald-400">{colaborador.nome}</h1>
+        <p className="text-gray-400">{colaborador.cargo}</p>
+      </div>
+
+      {/* Alerta Local do RH */}
+      {colaborador.alertaLocal && (
+        <div className="bg-yellow-900/50 border border-yellow-600 text-yellow-200 p-3 rounded-md mb-6 flex items-center">
+          <span className="mr-2">⚠️</span>
+          {colaborador.alertaLocal}
+        </div>
+      )}
+
+      {/* Navegação de Abas */}
+      <div className="flex gap-4 mb-4">
+        <button 
+          onClick={() => setAbaAtiva('dados')}
+          className={`px-4 py-2 rounded-t-md ${abaAtiva === 'dados' ? 'bg-gray-800 text-white' : 'text-gray-500 hover:text-gray-300'}`}
+        >
+          Dados Pessoais
+        </button>
+        <button 
+          onClick={() => setAbaAtiva('jornada')}
+          className={`px-4 py-2 rounded-t-md ${abaAtiva === 'jornada' ? 'bg-gray-800 text-white' : 'text-gray-500 hover:text-gray-300'}`}
+        >
+          Regras de Jornada
+        </button>
+      </div>
+
+      {/* Conteúdo da Aba */}
+      <div className="bg-gray-800 p-6 rounded-b-md rounded-tr-md">
+        {abaAtiva === 'dados' && <p>Formulário de telefone, endereço, etc...</p>}
+        {abaAtiva === 'jornada' && <p>Configuração de turno padrão (ex: 6x1, Tarde)...</p>}
+      </div>
+    </div>
+  );
+}
+```
+
+### Checklist Fase 2: Lógica do Modal de Edição em Lote (Bulk Edit)
+- [ ] **5. Estado de Seleção Múltipla:** Implementar controle de estado (`array` de IDs) para armazenar os colaboradores selecionados.
+- [ ] **6. Interface de Seleção com Checkboxes:** Renderizar lista de funcionários rolável dentro do modal com checkboxes individuais de seleção.
+- [ ] **7. Aplicação em Massa de Turno:** Integrar o dropdown de turnos (Manhã, Tarde, Folga) a um botão "Aplicar" que execute a mudança na API para todos os IDs selecionados de uma vez.
+
+**💻 Exemplo de Código (Lógica de Seleção Múltipla):**
+```typescriptreact
+import { useState } from 'react';
+
+export default function ModalEscalaLote() {
+  const [selecionados, setSelecionados] = useState<number[]>([]);
+  const [turnoEscolhido, setTurnoEscolhido] = useState<string>('');
+
+  const funcionarios = [
+    { id: 1, nome: "Ana Luiza" },
+    { id: 2, nome: "Marcos Oliveira" },
+    { id: 3, nome: "Carlos Rodrigues" }
+  ];
+
+  const toggleSelecao = (id: number) => {
+    setSelecionados(prev => prev.includes(id) ? prev.filter(userId => userId !== id) : [...prev, id]);
+  };
+
+  const aplicarEscala = () => {
+    if (selecionados.length === 0 || !turnoEscolhido) return;
+    console.log(`Aplicando o turno ${turnoEscolhido} para os IDs:`, selecionados);
+    setSelecionados([]);
+    setTurnoEscolhido('');
+  };
+
+  return (
+    <div className="bg-[#1E1E1E] p-6 rounded-lg w-96 text-gray-200 shadow-xl border border-gray-700">
+      <h2 className="text-xl mb-1">Definir Escala</h2>
+      <div className="max-h-48 overflow-y-auto mb-4 border border-gray-700 rounded p-2">
+        {funcionarios.map(func => (
+          <label key={func.id} className="flex items-center gap-3 p-2 hover:bg-gray-800 rounded cursor-pointer">
+            <input type="checkbox" checked={selecionados.includes(func.id)} onChange={() => toggleSelecao(func.id)} className="w-4 h-4 accent-emerald-500" />
+            {func.nome}
+          </label>
+        ))}
+      </div>
+      <select value={turnoEscolhido} onChange={(e) => setTurnoEscolhido(e.target.value)} className="w-full p-2 mb-4 bg-gray-800 border border-gray-600 rounded text-gray-200" disabled={selecionados.length === 0}>
+        <option value="">Escolha o Turno...</option>
+        <option value="manha">Manhã (06:00 - 14:00)</option>
+        <option value="tarde">Tarde (14:00 - 22:00)</option>
+        <option value="folga">Folga</option>
+      </select>
+      <button onClick={aplicarEscala} className="px-4 py-2 bg-[#A3D188] text-green-900 font-semibold rounded hover:bg-[#8ebb75] disabled:opacity-50" disabled={selecionados.length === 0}>Aplicar</button>
+    </div>
+  );
+}
+```
+
+### Checklist Fase 3: Motor de Validação CLT (Sino e Alertas)
+- [ ] **8. Utilitário de Interjornada:** Criar função pura para calcular a diferença entre o término do turno anterior e início do atual (disparando alerta se `< 11h`).
+- [ ] **9. Utilitário do 7º Dia:** Criar função para rastrear a malha de escala e identificar 7 dias consecutivos com status de "Trabalho" sem folga (DSR).
+- [ ] **10. Integração ao Sino Global:** Conectar as funções validadoras CLT ao componente do Header, ativando estado de erro (cor/contador) quando houver violações na equipe.
+
+**💻 Exemplo de Código (Lógica de Interjornada):**
+```typescript
+function verificaInterjornada(saidaOntem: string, entradaHoje: string) {
+  const dataSaida = new Date(`2026-04-06T${saidaOntem}:00`);
+  const dataEntrada = new Date(`2026-04-07T${entradaHoje}:00`);
+  const diffHoras = (dataEntrada.getTime() - dataSaida.getTime()) / (1000 * 60 * 60);
+  return diffHoras < 11 ? { valido: false, mensagem: `Descanso de apenas ${diffHoras}h. Mínimo é 11h.` } : { valido: true };
+}
+```
+
+---
+
 ## ✅ FASE 1: CRÍTICA (~8 horas)
 
 ### 1️⃣ Constantes de Calendário (1h)
@@ -536,6 +928,17 @@ Tempo de Manutenção           ⭐⭐⭐      ⭐⭐⭐⭐         ~+40%
 2. **Próximo**: Implemente FASE 1 seguindo o checklist
 3. **Depois**: Faça FASE 2 quando FASE 1 estiver 100% ok
 4. **Opcional**: FASE 3 se houver tempo
+
+### Atualizacao 09/04/2026 (estabilizacao e preparo de release 1.0.5-alpha)
+- Correcao de JSX em `SupervisorServicosTab.tsx` para remover bloco indevido e restaurar fechamento correto da arvore de renderizacao.
+- Correcao de renderizacao condicional em `SupervisorEquipeTab.tsx` (ramo ternario quebrado).
+- Ajuste de tipagem no backend para acesso seguro de `tempoHigienizacaoMin` em calculo de conflito (`backend/routes.ts`).
+- Alinhamento de props em `SupervisorView.tsx` removendo prop nao suportada em `SupervisorEscalaTab`.
+- Validacao tecnica executada e aprovada nesta rodada:
+  1. `npm run lint`
+  2. `npm --prefix frontend run build`
+- Bump de versao aplicado para `1.0.5-alpha` em root/frontend/backend.
+- Status atual: sem erro critico de compilacao no ciclo de validacao desta release.
 
 ---
 

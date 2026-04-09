@@ -11,9 +11,10 @@ interface SupervisorEquipeTabProps {
   onEditEmployee: (id: string, employee: Partial<Employee>) => Promise<boolean | string | void> | void;
   setToastMessage: (msg: string | null) => void;
   setErrorMessage: (msg: string | null) => void;
+  onViewEmployee?: (emp: Employee) => void;
 }
 
-export function SupervisorEquipeTab({ employees, onAddEmployee, onDeleteEmployee, onEditEmployee, setToastMessage, setErrorMessage }: SupervisorEquipeTabProps) {
+export function SupervisorEquipeTab({ employees, onAddEmployee, onDeleteEmployee, onEditEmployee, setToastMessage, setErrorMessage, onViewEmployee }: SupervisorEquipeTabProps) {
   const DEFAULT_PASSWORD = '123456';
   const WEEK_DAYS = [
     { value: '0', label: 'DOM' },
@@ -40,7 +41,6 @@ export function SupervisorEquipeTab({ employees, onAddEmployee, onDeleteEmployee
   const [searchTerm, setSearchTerm] = useState('');
   const [employeeCurrentPage, setEmployeeCurrentPage] = useState(1);
   const [showEmployeeForm, setShowEmployeeForm] = useState(false);
-  const [viewingEmployee, setViewingEmployee] = useState<Employee | null>(null);
   const [showScheduleModal, setShowScheduleModal] = useState(false);
   const [selectedEmpForSchedule, setSelectedEmpForSchedule] = useState<Employee | null>(null);
   const [scheduleHourStart, setScheduleHourStart] = useState('09:00');
@@ -314,11 +314,11 @@ export function SupervisorEquipeTab({ employees, onAddEmployee, onDeleteEmployee
                     <span className="material-symbols-outlined text-[20px]">schedule</span>
                   </button>
                   <button
-                    onClick={() => setViewingEmployee(emp)}
-                    className="p-2 text-on-surface-variant hover:bg-surface-container/40 hover:text-primary rounded-full"
-                    title="Ver folgas"
+                    onClick={() => onViewEmployee?.(emp)}
+                    className="p-2 text-on-surface-variant hover:bg-primary-container/20 hover:text-primary rounded-full"
+                    title="Perfil (RH)"
                   >
-                    <span className="material-symbols-outlined text-[20px]">event_busy</span>
+                    <span className="material-symbols-outlined text-[20px]">badge</span>
                   </button>
                   <button
                     onClick={() => {
@@ -562,43 +562,11 @@ export function SupervisorEquipeTab({ employees, onAddEmployee, onDeleteEmployee
         onConfirm={() => {
           if (!employeeToDelete) return;
           onDeleteEmployee(employeeToDelete);
-          setToastMessage('Colaborador excluído!');
-          setTimeout(() => setToastMessage(null), 3000);
           setEmployeeToDelete(null);
+          setToastMessage('Colaborador excluído.');
+          setTimeout(() => setToastMessage(null), 3000);
         }}
       />
-
-      {viewingEmployee && (
-        <div className="fixed inset-0 bg-black/55 backdrop-blur-sm z-70 p-4 flex items-center justify-center" onMouseDown={(event) => { if (event.target === event.currentTarget) setViewingEmployee(null); }}>
-          <motion.div initial={{ opacity: 0, scale: 0.95, y: 10 }} animate={{ opacity: 1, scale: 1, y: 0 }} className="bg-surface-container-low p-6 rounded-3xl border border-outline-variant/10 shadow-2xl w-full max-w-lg" onMouseDown={(event) => event.stopPropagation()}>
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-headline text-primary">Folgas do colaborador</h3>
-              <button type="button" onClick={() => setViewingEmployee(null)} className="p-2 rounded-full hover:bg-surface-container text-on-surface-variant"><span className="material-symbols-outlined">close</span></button>
-            </div>
-            <p className="text-sm text-on-surface mb-1 font-bold">{viewingEmployee.name}</p>
-            <p className="text-xs text-on-surface-variant mb-4">Dias fixos de trabalho: {(viewingEmployee.diasTrabalho || '').split(',').filter(Boolean).join(', ') || 'não definido'}</p>
-            <div className="space-y-2 max-h-72 overflow-y-auto custom-scrollbar pr-1">
-              {(viewingEmployee.bloqueios || []).length === 0 ? (
-                <p className="text-sm text-on-surface-variant">Nenhuma folga cadastrada.</p>
-              ) : (
-                viewingEmployee.bloqueios.map((bloq) => (
-                  <div key={bloq.id} className="rounded-2xl border border-outline-variant/20 bg-surface-container-lowest px-4 py-3">
-                    <div className="flex items-center justify-between gap-2">
-                      <p className="text-sm font-bold text-on-surface">{bloq.motivo}</p>
-                      <span className="text-[10px] font-bold uppercase tracking-widest text-primary">{bloq.data}</span>
-                    </div>
-                    <p className="text-xs text-on-surface-variant mt-1">{bloq.horaInicio} - {bloq.horaFim}</p>
-                  </div>
-                ))
-              )}
-            </div>
-            <div className="mt-5 flex justify-end gap-2">
-              <button type="button" onClick={() => { setNewEmpName(viewingEmployee.name); setNewEmpEmail(viewingEmployee.email); setNewEmpSpecialty(viewingEmployee.specialty); setNewEmpCargo(viewingEmployee.cargo || ''); setNewEmpTipoEscala(viewingEmployee.tipoEscala || '6x1'); setNewEmpFolgasDomingoNoMes(viewingEmployee.folgasDomingoNoMes ?? 2); setNewEmpCargaHoraria(viewingEmployee.cargaHorariaSemanal || 40); setNewEmpHabilidades(viewingEmployee.habilidades || []); setNewEmpRole(viewingEmployee.role); setNewEmpDiasTrabalho((viewingEmployee.diasTrabalho || '1,2,3,4,5,6').split(',')); setEditingEmployeeId(viewingEmployee.id); setViewingEmployee(null); setShowEmployeeForm(true); }} className="px-4 py-2 rounded-xl bg-surface-container border border-outline-variant/20 text-xs font-bold uppercase tracking-widest text-on-surface hover:bg-surface-container-high transition-colors">Alterar</button>
-              <button type="button" onClick={() => setViewingEmployee(null)} className="px-4 py-2 rounded-xl bg-primary text-on-primary text-xs font-bold uppercase tracking-widest hover:bg-primary-dim transition-colors">Fechar</button>
-            </div>
-          </motion.div>
-        </div>
-      )}
 
       {showScheduleModal && selectedEmpForSchedule && (
         <div className="fixed inset-0 bg-black/55 backdrop-blur-sm z-50 p-4 flex items-center justify-center" onMouseDown={(event) => { if (event.target === event.currentTarget) closeScheduleModal(); }}>
@@ -609,8 +577,8 @@ export function SupervisorEquipeTab({ employees, onAddEmployee, onDeleteEmployee
             </div>
             <div className="space-y-4 max-h-[72vh] overflow-y-auto pr-1 custom-scrollbar">
               <div>
-                <p className="text-sm font-bold text-on-surface mb-2">{selectedEmpForSchedule.name}</p>
-                <p className="text-xs text-on-surface-variant">{selectedEmpForSchedule.specialty}</p>
+                <p className="text-sm font-bold text-on-surface mb-2">{selectedEmpForSchedule?.name}</p>
+                <p className="text-xs text-on-surface-variant">{selectedEmpForSchedule?.specialty}</p>
               </div>
 
               <div>

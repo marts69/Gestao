@@ -71,7 +71,7 @@ export function LoginView({ onLogin, onOpenTVPanel, error }: LoginViewProps) {
         className="hidden md:block md:w-1/2 lg:w-3/5 bg-cover bg-center relative"
         style={{ backgroundImage: `url(${bgImage})` }}
       >
-        <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/20 to-transparent"></div>
+        <div className="absolute inset-0 bg-linear-to-t from-black/60 via-black/20 to-transparent"></div>
         <div className="absolute bottom-10 left-10 text-white">
           <h1 className="text-5xl font-serif italic mb-2">Serenidade Spa</h1>
           <p className="text-lg text-white/80">Plataforma de gestão completa para o seu negócio.</p>

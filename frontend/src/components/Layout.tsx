@@ -10,12 +10,14 @@ interface LayoutProps {
   onViewChange?: (view: Role | 'tv') => void;
   onOpenUpcomingAppointments?: () => void;
   upcomingAppointmentsCount?: number;
+  cltAlertsCount?: number;
+  onOpenCltAlerts?: () => void;
   onLogout: () => void;
   isDarkMode?: boolean;
   toggleTheme?: () => void;
 }
 
-export function Layout({ children, userName, userRole, activeView, onViewChange, onOpenUpcomingAppointments, upcomingAppointmentsCount = 0, onLogout, isDarkMode, toggleTheme }: LayoutProps) {
+export function Layout({ children, userName, userRole, activeView, onViewChange, onOpenUpcomingAppointments, upcomingAppointmentsCount = 0, cltAlertsCount = 0, onOpenCltAlerts, onLogout, isDarkMode, toggleTheme }: LayoutProps) {
   const [showSettings, setShowSettings] = useState(false);
   const settingsRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
@@ -116,6 +118,20 @@ export function Layout({ children, userName, userRole, activeView, onViewChange,
                 title="Estilo e Cores"
               >
                 <span className="material-symbols-outlined">palette</span>
+              </button>
+            )}
+            {userRole === 'supervisor' && activeView === 'supervisor' && onOpenCltAlerts && (
+              <button
+                onClick={onOpenCltAlerts}
+                className="relative text-on-surface-variant hover:bg-surface-container hover:text-primary w-10 h-10 flex items-center justify-center rounded-full transition-all"
+                title="Alertas e Auditoria"
+              >
+                <span className="material-symbols-outlined">notifications</span>
+                {cltAlertsCount > 0 && (
+                  <span className="absolute top-1 right-1 w-3.5 h-3.5 bg-error text-on-error text-[8px] font-bold rounded-full flex items-center justify-center shadow-sm border border-surface">
+                    {cltAlertsCount > 9 ? '9+' : cltAlertsCount}
+                  </span>
+                )}
               </button>
             )}
             <span className="text-sm font-bold text-primary hidden md:block">{userName}</span>

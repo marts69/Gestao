@@ -8,10 +8,29 @@ interface TVPanelViewProps {
   onExit: () => void;
 }
 
+const formatClientName = (fullName: string) => {
+  if (!fullName) return '';
+  const parts = fullName.trim().split(' ').filter(Boolean);
+  if (parts.length === 1) return parts[0];
+  const first = parts[0];
+  const initials = parts.slice(1).map(p => p.charAt(0).toUpperCase() + '.').join(' ');
+  return `${first} ${initials}`;
+};
+
 export function TVPanelView({ appointments, employees, onExit }: TVPanelViewProps) {
   const [currentTime, setCurrentTime] = useState(new Date());
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [weather, setWeather] = useState<{ temp: number; description: string; icon: string } | null>(null);
+  const [tvConfig, setTvConfig] = useState(() => {
+    const saved = localStorage.getItem('spa_tv_config');
+    return saved ? JSON.parse(saved) : {
+      bgAnimated: true,
+      emptyMode: 'qr', // 'qr', 'text', 'logo'
+      emptyTitle: 'Aproveite sua jornada',
+      emptyText: 'Escaneie o QR Code para acessar nosso cardápio digital de chás e serviços extras. Acomode-se, seu momento de paz já vai começar.',
+      qrUrl: 'https://serenidadespa.com/menu'
+    };
+  });
 
   // Relógio em tempo real
   useEffect(() => {
@@ -102,28 +121,40 @@ export function TVPanelView({ appointments, employees, onExit }: TVPanelViewProp
     }
   };
 
+  // Escuta mudanças feitas no painel do Supervisor em outra aba e atualiza a TV na hora!
+  useEffect(() => {
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === 'spa_tv_config' && e.newValue) {
+        setTvConfig(JSON.parse(e.newValue));
+      }
+    };
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
+  }, []);
+
   // Lógica para detectar novos agendamentos e tocar o som
   const isFirstRender = useRef(true);
-  const prevCount = useRef(upcoming.length);
+  const firstUpcomingId = upcoming[0]?.id;
+  const prevFirstId = useRef(firstUpcomingId);
 
   useEffect(() => {
     if (isFirstRender.current) {
       isFirstRender.current = false;
-      prevCount.current = upcoming.length;
+      prevFirstId.current = firstUpcomingId;
       return;
     }
 
-    if (upcoming.length > prevCount.current) {
-      // Toca um som suave de notificação elegante
-      const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
+    if (firstUpcomingId && firstUpcomingId !== prevFirstId.current) {
+      // Toca um som suave de notificação elegante (taça de cristal / sino tibetano)
+      const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2496/2496-preview.mp3');
       audio.play().catch(e => console.log('O áudio não pôde ser reproduzido automaticamente:', e));
     }
     
-    prevCount.current = upcoming.length;
-  }, [upcoming.length]);
+    prevFirstId.current = firstUpcomingId;
+  }, [firstUpcomingId]);
 
   return (
-    <div className="min-h-screen bg-[#001410] text-white p-8 md:p-16 flex flex-col fixed inset-0 z-[200] antialiased">
+    <div className="min-h-screen bg-[#001410] text-white p-8 md:p-16 flex flex-col fixed inset-0 z-200 antialiased">
       <div className="flex justify-between items-center mb-12 border-b border-white/10 pb-8">
         <div className="flex items-center gap-6">
           <span className="material-symbols-outlined text-6xl text-[#afefdd]">spa</span>
@@ -149,29 +180,40 @@ export function TVPanelView({ appointments, employees, onExit }: TVPanelViewProp
       
       <div className="grid gap-6">
         <AnimatePresence mode="popLayout">
-          {upcoming.slice(0, 5).map(app => {
+          {upcoming.slice(0, 5).map((app, index) => {
             const emp = employees.find(e => e.id === app.assignedEmployeeId);
+            const isNext = index === 0;
             return (
               <motion.div 
                 layout
                 initial={{ opacity: 0, x: -50, scale: 0.95 }}
-                animate={{ opacity: 1, x: 0, scale: 1 }}
+                animate={{ opacity: isNext ? 1 : 0.6, x: 0, scale: isNext ? 1 : 0.98 }}
                 exit={{ opacity: 0, scale: 0.9, transition: { duration: 0.2 } }}
                 transition={{ duration: 0.6, type: "spring", bounce: 0.3 }}
                 key={app.id} 
-                className="bg-white/5 border border-white/10 p-8 rounded-3xl flex justify-between items-center shadow-2xl"
+                className={`relative border p-8 rounded-3xl shadow-2xl overflow-hidden ${isNext ? 'bg-[#afefdd]/10 border-[#afefdd]/30' : 'bg-white/5 border-white/10'}`}
               >
-                <div className="flex items-center gap-10">
-                  <div className="text-6xl font-bold text-[#afefdd] tabular-nums">{app.time}</div>
-                  <div className="w-1.5 h-20 bg-[#afefdd]/30 rounded-full"></div>
-                  <div>
-                    <h4 className="text-4xl font-bold text-white mb-2">{app.clientName}</h4>
-                    <p className="text-2xl text-white/60">{app.services.join(', ')}</p>
+                {isNext && (
+                  <div className="absolute top-4 right-6 flex items-center gap-2">
+                    <span className="relative flex h-3 w-3">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#afefdd] opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-3 w-3 bg-[#afefdd]"></span>
+                    </span>
+                    <span className="text-[#afefdd] text-sm font-bold uppercase tracking-widest">Chamando Agora</span>
                   </div>
-                </div>
-                <div className="text-right">
-                  <p className="text-2xl text-[#afefdd] uppercase tracking-widest">{emp?.name?.split(' ')[0] || 'Não atribuído'}</p>
-                  <p className="text-xl text-white/50">{emp?.specialty}</p>
+                )}
+                <div className="grid grid-cols-12 gap-6 items-center">
+                  <div className="col-span-3 lg:col-span-2">
+                    <div className={`text-5xl lg:text-6xl font-bold tabular-nums ${isNext ? 'text-white' : 'text-[#afefdd]'}`}>{app.time}</div>
+                  </div>
+                  <div className="col-span-5 lg:col-span-6 border-l border-white/10 pl-6">
+                    <h4 className="text-3xl lg:text-4xl font-bold text-white mb-2 truncate">{formatClientName(app.clientName)}</h4>
+                    <p className={`text-xl lg:text-2xl truncate ${isNext ? 'text-[#afefdd]/80' : 'text-white/60'}`}>{app.services.join(', ')}</p>
+                  </div>
+                  <div className="col-span-4 text-right border-l border-white/10 pl-6">
+                    <p className="text-xl lg:text-2xl text-[#afefdd] uppercase tracking-widest truncate">{emp?.name?.split(' ')[0] || 'Não atribuído'}</p>
+                    <p className="text-lg lg:text-xl text-white/50 truncate">{emp?.specialty || 'Profissional'}</p>
+                  </div>
                 </div>
               </motion.div>
             );

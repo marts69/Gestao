@@ -1,7 +1,7 @@
 import { Appointment, Service } from '../../../types';
 import { formatPhone } from '../../../utils/formatters';
 
-type ServiceLike = Pick<Service, 'nome'> & Partial<Pick<Service, 'id' | 'duracao' | 'preco'>>;
+type ServiceLike = Pick<Service, 'nome'> & Partial<Pick<Service, 'id' | 'duracao' | 'preco' | 'tempoHigienizacaoMin'>>;
 
 const BRAZIL_TIMEZONE = 'America/Sao_Paulo';
 
@@ -49,7 +49,7 @@ export const getDuration = (serviceNames: string[] = [], services: ServiceLike[]
     const sameName = normalizeKey(s.nome) === key;
     return sameId || sameName;
   });
-  return sum + (Number(srv?.duracao) || 60);
+  return sum + (Number(srv?.duracao) || 60) + (Number(srv?.tempoHigienizacaoMin) || 0);
 }, 0);
 
 const normalizeSearch = (value: string) => value

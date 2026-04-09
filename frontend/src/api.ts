@@ -92,7 +92,7 @@ const fetchApi = async (url: string, token: string | null, options: RequestInit 
       : 'Falha de rede ao acessar o servidor';
 
     const networkMessage = /Failed to fetch|NetworkError|fetch/i.test(fallbackMessage)
-      ? 'Servidor indisponivel no momento. Verifique a API e tente novamente.'
+    ? 'Servidor indisponível no momento. Verifique a API e tente novamente.'
       : fallbackMessage;
 
     throw new ApiError(networkMessage, 503, null, 'NETWORK_ERROR');

@@ -34,6 +34,7 @@ interface SupervisorEscalaTabProps {
   onDeleteBloqueio?: (id: string) => Promise<boolean | void>;
   setToastMessage: (msg: string | null) => void;
   setErrorMessage: (msg: string | null) => void;
+  buildScaleForEmployee?: (employeeId: string) => any[];
 }
 
 type EmployeeDayStatus = {
@@ -42,7 +43,7 @@ type EmployeeDayStatus = {
   isAllDayUnavailable: boolean;
 };
 
-export function SupervisorEscalaTab({ employees, appointments, services, clients, scaleOverrides = [], onOpenUpcomingAppointments, onReassignAppointment, onAddAppointment, isAddingAppointment, onDeleteAppointment, onEditAppointment, onCompleteAppointment, onEditClient, onAddBloqueio, onDeleteBloqueio, setToastMessage, setErrorMessage }: SupervisorEscalaTabProps) {
+export function SupervisorEscalaTab({ employees, appointments, services, clients, scaleOverrides = [], onOpenUpcomingAppointments, onReassignAppointment, onAddAppointment, isAddingAppointment, onDeleteAppointment, onEditAppointment, onCompleteAppointment, onEditClient, onAddBloqueio, onDeleteBloqueio, setToastMessage, setErrorMessage, buildScaleForEmployee }: SupervisorEscalaTabProps) {
   const [receptionDate, setReceptionDate] = useState(getLocalTodayString());
   const [scheduleSearchTerm, setScheduleSearchTerm] = useState('');
   const [professionalFilter, setProfessionalFilter] = useState('all');
@@ -155,6 +156,20 @@ export function SupervisorEscalaTab({ employees, appointments, services, clients
   }, []);
 
   const getEmployeeDayStatus = useCallback((emp: Employee): EmployeeDayStatus | null => {
+    // 1. Verifica se a escala base oficial da equipe diz que é folga neste mês
+    if (buildScaleForEmployee) {
+      const scaleDay = buildScaleForEmployee(emp.id).find((d: any) => d.data === receptionDate);
+      if (scaleDay && scaleDay.tipo !== 'trabalho') {
+        const isFerias = isFeriasReason(scaleDay.descricao);
+        return {
+          label: isFerias ? 'Férias' : (scaleDay.tipo === 'fds' ? 'FDS' : 'Folga'),
+          reason: scaleDay.descricao || 'Folga contratual (Escala)',
+          isAllDayUnavailable: true,
+        };
+      }
+    }
+
+    // 2. Verifica overrides e bloqueios manuais locais
     const override = dayScaleOverrideByEmployee.get(emp.id);
     if (override) {
       const isFerias = isFeriasReason(override.descricao);
@@ -207,7 +222,7 @@ export function SupervisorEscalaTab({ employees, appointments, services, clients
       reason: fullDayBlock.motivo,
       isAllDayUnavailable: true,
     };
-  }, [dayScaleOverrideByEmployee, receptionDate, isFeriasReason]);
+  }, [dayScaleOverrideByEmployee, receptionDate, isFeriasReason, buildScaleForEmployee]);
 
   // Lógica de Scroll e Interações Visuais
   const scrollHorizontally = (direction: 'left' | 'right') => {
