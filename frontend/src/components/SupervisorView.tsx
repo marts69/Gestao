@@ -81,6 +81,10 @@ type ScaleOverridePayload = {
   descricao?: string;
 };
 
+type PlanningDateScope = 'mensal' | 'semanal';
+type PlanningShiftFilter = 'all' | 'manha' | 'tarde' | 'noite' | 'comercial' | 'folga';
+type PlanningWorkloadFilter = 'all' | 'ate36' | '37a44' | '45plus';
+
 type ScaleSwapPayload = {
   from: {
     colaboradorId: string;
@@ -169,6 +173,11 @@ export function SupervisorView({ employees, appointments, services, clients, sca
   const [employeeSearchTerm, setEmployeeSearchTerm] = useState('');
   const [filterRole, setFilterRole] = useState<string>('all');
   const [filterStatus, setFilterStatus] = useState<'all' | 'folgaHoje'>('all');
+  const [planningDateScope, setPlanningDateScope] = useState<PlanningDateScope>('mensal');
+  const [planningWeekIndex, setPlanningWeekIndex] = useState(1);
+  const [planningEmployeeFilter, setPlanningEmployeeFilter] = useState<string>('all');
+  const [planningShiftFilter, setPlanningShiftFilter] = useState<PlanningShiftFilter>('all');
+  const [planningWorkloadFilter, setPlanningWorkloadFilter] = useState<PlanningWorkloadFilter>('all');
   const [isScaleGeneratorOpen, setIsScaleGeneratorOpen] = useState(false);
   const [scaleGeneratorEmployeeId, setScaleGeneratorEmployeeId] = useState('');
   const [scaleGeneratorMonth, setScaleGeneratorMonth] = useState(getLocalTodayString().slice(0, 7));
@@ -640,14 +649,132 @@ export function SupervisorView({ employees, appointments, services, clients, sca
     input.click();
   }, []);
 
+  const selectedScaleMonthMeta = useMemo(() => {
+    const [yearRaw, monthRaw] = selectedScaleMonth.split('-').map(Number);
+    const year = Number.isFinite(yearRaw) ? yearRaw : new Date().getFullYear();
+    const month = Number.isFinite(monthRaw) ? monthRaw : new Date().getMonth() + 1;
+    const days = new Date(year, month, 0).getDate();
+    const firstWeekday = new Date(year, month - 1, 1).getDay();
+    return { year, month, days, firstWeekday };
+  }, [selectedScaleMonth]);
+
+  const selectedScaleMonthDayCount = selectedScaleMonthMeta.days;
+
+  const planningWeekRanges = useMemo(() => {
+    const ranges: Array<{ start: number; end: number }> = [];
+    const { days, firstWeekday } = selectedScaleMonthMeta;
+
+    if (days <= 0) return [{ start: 1, end: 1 }];
+
+    const firstWeekLength = Math.max(1, 7 - firstWeekday);
+    const firstEnd = Math.min(days, firstWeekLength);
+    ranges.push({ start: 1, end: firstEnd });
+
+    let cursor = firstEnd + 1;
+    while (cursor <= days) {
+      const end = Math.min(days, cursor + 6);
+      ranges.push({ start: cursor, end });
+      cursor = end + 1;
+    }
+
+    return ranges;
+  }, [selectedScaleMonthMeta]);
+
+  const planningWeekOptions = useMemo(() => {
+    return planningWeekRanges.map((_, index) => index + 1);
+  }, [planningWeekRanges]);
+
+  useEffect(() => {
+    setPlanningWeekIndex((current) => {
+      if (current <= planningWeekOptions.length) return current;
+      return planningWeekOptions.length;
+    });
+  }, [planningWeekOptions]);
+
+  const planningVisibleDayRange = useMemo(() => {
+    if (planningDateScope === 'mensal') {
+      return {
+        start: 1,
+        end: selectedScaleMonthDayCount,
+      };
+    }
+
+    const selectedWeekRange = planningWeekRanges[Math.max(0, planningWeekIndex - 1)] || planningWeekRanges[0];
+    return selectedWeekRange;
+  }, [planningDateScope, planningWeekIndex, planningWeekRanges, selectedScaleMonthDayCount]);
+
+  useEffect(() => {
+    if (planningEmployeeFilter === 'all') return;
+    setSelectedScaleEmployeeId(planningEmployeeFilter);
+  }, [planningEmployeeFilter]);
+
+  const classifyShift = useCallback((dia: DiaEscala): Exclude<PlanningShiftFilter, 'all' | 'folga'> | null => {
+    if (dia.tipo !== 'trabalho') return null;
+
+    const turnoRef = dia.turno || ((dia.horaInicio && dia.horaFim) ? `${dia.horaInicio}-${dia.horaFim}` : '');
+    if (!turnoRef.includes('-')) return 'comercial';
+
+    const [start] = turnoRef.split('-');
+    const startHour = Number(start.split(':')[0]);
+
+    if (Number.isNaN(startHour)) return 'comercial';
+    if (startHour >= 12 && startHour < 18) return 'tarde';
+    if (startHour >= 18 || startHour < 5) return 'noite';
+
+    if (startHour >= 5 && startHour < 12) {
+      if (turnoRef.includes('18:00') || turnoRef.includes('19:00') || turnoRef.includes('17:00')) {
+        return 'comercial';
+      }
+      return 'manha';
+    }
+
+    return 'comercial';
+  }, []);
+
+  const scaleByEmployee = useMemo(() => {
+    const map = new Map<string, DiaEscala[]>();
+    activeNonAdminEmployees.forEach((employee) => {
+      map.set(employee.id, buildScaleForEmployee(employee.id));
+    });
+    return map;
+  }, [activeNonAdminEmployees, buildScaleForEmployee]);
+
   const timelineEmployees = useMemo(() => {
     const search = employeeSearchTerm.trim().toLowerCase();
 
+    const isDayInsideRange = (dia: DiaEscala) => {
+      const dayValue = Number(dia.data.split('-')[2]);
+      if (!Number.isFinite(dayValue)) return false;
+      return dayValue >= planningVisibleDayRange.start && dayValue <= planningVisibleDayRange.end;
+    };
+
+    const workloadMatches = (employee: Employee) => {
+      const carga = Number(employee.cargaHorariaSemanal) || 40;
+      if (planningWorkloadFilter === 'all') return true;
+      if (planningWorkloadFilter === 'ate36') return carga <= 36;
+      if (planningWorkloadFilter === '37a44') return carga >= 37 && carga <= 44;
+      return carga >= 45;
+    };
+
     return activeNonAdminEmployees.filter((emp) => {
+      const employeeScale = scaleByEmployee.get(emp.id) || [];
+      const visibleScale = employeeScale.filter(isDayInsideRange);
+
       if (filterRole !== 'all' && emp.cargo !== filterRole) return false;
+      if (planningEmployeeFilter !== 'all' && emp.id !== planningEmployeeFilter) return false;
+      if (!workloadMatches(emp)) return false;
+
       if (filterStatus === 'folgaHoje') {
-        const diaHoje = buildScaleForEmployee(emp.id).find((dia) => dia.data === todayStr);
+        const diaHoje = employeeScale.find((dia) => dia.data === todayStr);
         if (diaHoje?.tipo !== 'folga') return false;
+      }
+
+      if (planningShiftFilter !== 'all') {
+        const hasShiftMatch = planningShiftFilter === 'folga'
+          ? visibleScale.some((dia) => dia.tipo !== 'trabalho')
+          : visibleScale.some((dia) => classifyShift(dia) === planningShiftFilter);
+
+        if (!hasShiftMatch) return false;
       }
 
       if (search) {
@@ -657,7 +784,19 @@ export function SupervisorView({ employees, appointments, services, clients, sca
 
       return true;
     });
-  }, [activeNonAdminEmployees, buildScaleForEmployee, employeeSearchTerm, filterRole, filterStatus, todayStr]);
+  }, [
+    activeNonAdminEmployees,
+    classifyShift,
+    employeeSearchTerm,
+    filterRole,
+    filterStatus,
+    planningEmployeeFilter,
+    planningShiftFilter,
+    planningVisibleDayRange,
+    planningWorkloadFilter,
+    scaleByEmployee,
+    todayStr,
+  ]);
 
   const filteredScaleGeneratorEmployees = useMemo(() => {
     const search = scaleGeneratorSearch.trim().toLowerCase();
@@ -1123,6 +1262,18 @@ export function SupervisorView({ employees, appointments, services, clients, sca
           setEmployeeSearchTerm={setEmployeeSearchTerm}
           filterStatus={filterStatus}
           setFilterStatus={setFilterStatus}
+          planningDateScope={planningDateScope}
+          setPlanningDateScope={setPlanningDateScope}
+          planningWeekIndex={planningWeekIndex}
+          setPlanningWeekIndex={setPlanningWeekIndex}
+          planningWeekOptions={planningWeekOptions}
+          planningEmployeeFilter={planningEmployeeFilter}
+          setPlanningEmployeeFilter={setPlanningEmployeeFilter}
+          planningShiftFilter={planningShiftFilter}
+          setPlanningShiftFilter={setPlanningShiftFilter}
+          planningWorkloadFilter={planningWorkloadFilter}
+          setPlanningWorkloadFilter={setPlanningWorkloadFilter}
+          planningVisibleDayRange={planningVisibleDayRange}
           handleTogglePlanningEditMode={handleTogglePlanningEditMode}
           isPlanningEditMode={isPlanningEditMode}
           handleOpenScaleGenerator={handleOpenScaleGenerator}

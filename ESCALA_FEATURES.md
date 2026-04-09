@@ -50,7 +50,7 @@ interface TurnoEscala {
 - Por turno
 - Por carga horária
 
-**Status:** 🟡 Parcialmente implementado (calendário/timeline ativos; filtros avançados seguem em backlog - BLG-004)
+**Status:** ✅ Implementado (calendário/timeline ativos com filtros combináveis: semanal, mensal, colaborador, turno e carga horária)
 
 ---
 
@@ -264,9 +264,9 @@ src/
 
 ## 🎯 Próximos Passos (Executivos)
 
-1. Fechar BLG-004 (filtros avançados da escala).
-2. Fechar BLG-006 (relatórios e exportação PDF/CSV).
-3. Fechar BLG-005 (férias automáticas em período permitido).
+1. Fechar BLG-006 (relatórios e exportação PDF/CSV).
+2. Fechar BLG-005 (férias automáticas em período permitido).
+3. Revisar UX dos novos filtros com supervisão em cenário real.
 4. Manter novos pendentes apenas no BACKLOG_ATIVO.md.
 
 ---

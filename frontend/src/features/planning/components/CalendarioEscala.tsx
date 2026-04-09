@@ -5,6 +5,7 @@ interface CalendarioEscalaProps {
   escalas: DiaEscala[];
   year: number;
   month: number; // 1-12
+  dayRange?: { start: number; end: number };
   selectedMonth?: string;
   onMonthChange?: (month: string) => void;
   hideMonthBadge?: boolean;
@@ -14,7 +15,7 @@ interface CalendarioEscalaProps {
 
 const DAY_HEADERS = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sab'];
 
-export function CalendarioEscala({ escalas, year, month, selectedMonth, onMonthChange, hideMonthBadge = false, onDayClick, isInteractive = false }: CalendarioEscalaProps) {
+export function CalendarioEscala({ escalas, year, month, dayRange, selectedMonth, onMonthChange, hideMonthBadge = false, onDayClick, isInteractive = false }: CalendarioEscalaProps) {
   const monthInputRef = useRef<HTMLInputElement | null>(null);
 
   const monthLabel = useMemo(() => {
@@ -25,14 +26,24 @@ export function CalendarioEscala({ escalas, year, month, selectedMonth, onMonthC
     return label.charAt(0).toUpperCase() + label.slice(1);
   }, [month, year]);
 
-  const { daysInMonth, firstDayOfMonth, mapByDay, today } = useMemo(() => {
+  const { daysInMonth, firstVisibleDayOffset, visibleDays, mapByDay, today } = useMemo(() => {
     const days = new Date(year, month, 0).getDate();
-    const firstDay = new Date(year, month - 1, 1).getDay();
     const map = new Map<number, DiaEscala>();
     const currentDate = new Date();
     const todayDay = currentDate.getFullYear() === year && currentDate.getMonth() + 1 === month 
       ? currentDate.getDate() 
       : -1;
+
+    const rangeStart = Math.max(1, dayRange?.start ?? 1);
+    const rangeEnd = Math.min(days, dayRange?.end ?? days);
+    const visible = rangeEnd >= rangeStart
+      ? Array.from({ length: rangeEnd - rangeStart + 1 }, (_, index) => rangeStart + index)
+      : [];
+
+    const firstVisible = visible[0] || 1;
+    const firstOffset = visible.length > 0
+      ? new Date(year, month - 1, firstVisible).getDay()
+      : 0;
 
     escalas.forEach((item) => {
       const [itemYear, itemMonth, itemDay] = item.data.split('-').map(Number);
@@ -43,11 +54,12 @@ export function CalendarioEscala({ escalas, year, month, selectedMonth, onMonthC
 
     return {
       daysInMonth: days,
-      firstDayOfMonth: firstDay,
+      firstVisibleDayOffset: firstOffset,
+      visibleDays: visible,
       mapByDay: map,
       today: todayDay,
     };
-  }, [escalas, year, month]);
+  }, [dayRange?.end, dayRange?.start, escalas, month, year]);
 
   const cltViolationDays = useMemo(() => {
     const violations = new Set<number>();
@@ -119,12 +131,11 @@ export function CalendarioEscala({ escalas, year, month, selectedMonth, onMonthC
       </div>
 
       <div className="grid grid-cols-7 gap-1 sm:gap-1.5">
-        {Array.from({ length: firstDayOfMonth }).map((_, index) => (
+        {Array.from({ length: firstVisibleDayOffset }).map((_, index) => (
           <div key={`empty-${index}`} className="h-16 sm:h-20 rounded-lg sm:rounded-xl bg-surface-container-low/20 border border-outline-variant/5" />
         ))}
 
-        {Array.from({ length: daysInMonth }).map((_, index) => {
-          const day = index + 1;
+        {visibleDays.map((day) => {
           const escala = mapByDay.get(day);
           const weekDay = new Date(year, month - 1, day).getDay();
           const isWeekend = weekDay === 0 || weekDay === 6;

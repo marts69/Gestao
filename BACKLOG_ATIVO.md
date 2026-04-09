@@ -29,7 +29,7 @@ Período sugerido: 17/04/2026 a 24/04/2026
 
 | Item | Objetivo | Responsável | Estimativa |
 |------|----------|-------------|------------|
-| BLG-004 | Filtros avançados da escala | Frontend | 10h |
+| BLG-004 | Filtros avançados da escala (concluído em 09/04/2026) | Frontend | 10h |
 | BLG-005 | Férias automáticas | Backend + Frontend | 6h |
 | BLG-006 | Relatórios e exportação (PDF/CSV) | Frontend + Backend | 14h |
 | BLG-007 | Padronização documental frontend/backend | Documentação | 4h |
@@ -63,10 +63,11 @@ Esforço agregado estimado para roadmap P2 (BLG-008 a BLG-013): 70h a 110h.
 
 ## P1 - Próxima Sprint (Produto)
 
-- [ ] BLG-004 - Expandir filtros de visualização da escala (semanal, mensal, por colaborador, por turno, por carga horária).
+- [x] BLG-004 - Expandir filtros de visualização da escala (semanal, mensal, por colaborador, por turno, por carga horária).
   - Responsável: Frontend
   - Co-responsável: Produto/Supervisão
   - Critério de aceite: filtros disponíveis na UI e combináveis sem regressão no desempenho da timeline/calendário.
+  - Evidências: recorte semanal/mensal com range por semana de calendário, filtro por colaborador, turno e faixa de carga semanal em Planejamento.
   - Fonte: ESCALA_FEATURES.md
 
 - [ ] BLG-005 - Implementar férias automáticas em período permitido.
@@ -131,3 +132,4 @@ Esforço agregado estimado para roadmap P2 (BLG-008 a BLG-013): 70h a 110h.
 - Migração Prisma do módulo de escalas no ambiente alvo marcada como concluída em INTEGRACAO_ESCALAS.md.
 - Pendências removidas dos documentos históricos e centralizadas neste arquivo.
 - BLG-003 concluído com validação de testes/lint/build em 09/04/2026.
+- BLG-004 concluído com validação de lint/build em 09/04/2026.

@@ -6,6 +6,7 @@ interface TimelineGanttProps {
   employees: Employee[];
   appointments?: Appointment[];
   month: string; // "2026-04"
+  dayRange?: { start: number; end: number };
   selectedMonth?: string;
   onMonthChange?: (month: string) => void;
   hideMonthBadge?: boolean;
@@ -26,7 +27,7 @@ interface TimelineGanttProps {
   }>;
 }
 
-export function TimelineGantt({ employees, appointments, month, selectedMonth, onMonthChange, hideMonthBadge = false, isEditable = false, suggestedKeys = [], onQuickToggleDay, onQuickSetDay, onClick, onShiftDrop, onReplicate, minStaffRequired, overrides = [] }: TimelineGanttProps) {
+export function TimelineGantt({ employees, appointments, month, dayRange, selectedMonth, onMonthChange, hideMonthBadge = false, isEditable = false, suggestedKeys = [], onQuickToggleDay, onQuickSetDay, onClick, onShiftDrop, onReplicate, minStaffRequired, overrides = [] }: TimelineGanttProps) {
   const [dragOverKey, setDragOverKey] = useState<string | null>(null);
   const [quickMenu, setQuickMenu] = useState<{
     employeeId: string;
@@ -39,7 +40,12 @@ export function TimelineGantt({ employees, appointments, month, selectedMonth, o
   const suggestedKeySet = useMemo(() => new Set(suggestedKeys), [suggestedKeys]);
 
   const daysInMonth = new Date(year, monthNum, 0).getDate();
-  const days = Array.from({ length: daysInMonth }, (_, i) => i + 1);
+  const visibleDays = useMemo(() => {
+    const start = Math.max(1, dayRange?.start ?? 1);
+    const end = Math.min(daysInMonth, dayRange?.end ?? daysInMonth);
+    if (end < start) return [] as number[];
+    return Array.from({ length: end - start + 1 }, (_, index) => start + index);
+  }, [dayRange?.end, dayRange?.start, daysInMonth]);
 
   const monthLabel = useMemo(() => {
     const label = new Date(year, monthNum - 1, 1).toLocaleDateString('pt-BR', {
@@ -54,7 +60,7 @@ export function TimelineGantt({ employees, appointments, month, selectedMonth, o
     const currentDate = new Date();
     const todayDay = currentDate.getFullYear() === year && currentDate.getMonth() + 1 === monthNum ? currentDate.getDate() : -1;
 
-    return days.map((day) => {
+    return visibleDays.map((day) => {
       const date = new Date(year, monthNum - 1, day);
       const weekday = date.getDay();
       return {
@@ -65,7 +71,7 @@ export function TimelineGantt({ employees, appointments, month, selectedMonth, o
         isToday: day === todayDay,
       };
     });
-  }, [days, monthNum, year]);
+  }, [monthNum, visibleDays, year]);
 
   const overridesMap = useMemo(() => {
     const map = new Map<string, { tipo: DiaEscala['tipo']; turno?: string; descricao?: string }>();

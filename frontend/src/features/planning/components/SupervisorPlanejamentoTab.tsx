@@ -29,6 +29,18 @@ export function SupervisorPlanejamentoTab(props: SupervisorPlanejamentoTabProps)
     setEmployeeSearchTerm,
     filterStatus,
     setFilterStatus,
+    planningDateScope,
+    setPlanningDateScope,
+    planningWeekIndex,
+    setPlanningWeekIndex,
+    planningWeekOptions,
+    planningEmployeeFilter,
+    setPlanningEmployeeFilter,
+    planningShiftFilter,
+    setPlanningShiftFilter,
+    planningWorkloadFilter,
+    setPlanningWorkloadFilter,
+    planningVisibleDayRange,
     handleTogglePlanningEditMode,
     isPlanningEditMode,
     handleOpenScaleGenerator,
@@ -302,6 +314,102 @@ export function SupervisorPlanejamentoTab(props: SupervisorPlanejamentoTabProps)
                   </button>
                 </div>
               </div>
+
+              {/* Linha 3: filtros avançados combináveis */}
+              <div className="mt-4 pt-4 border-t border-outline-variant/10 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-6 gap-3">
+                <div>
+                  <label className="block text-[10px] font-bold uppercase tracking-[0.15em] text-on-surface-variant mb-2">Recorte</label>
+                  <select
+                    value={planningDateScope}
+                    onChange={(event) => setPlanningDateScope(event.target.value as 'mensal' | 'semanal')}
+                    className="w-full h-11 bg-surface-container-low border border-outline-variant/20 rounded-xl px-3 text-sm text-on-surface"
+                  >
+                    <option value="mensal">Mensal</option>
+                    <option value="semanal">Semanal</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-bold uppercase tracking-[0.15em] text-on-surface-variant mb-2">Semana</label>
+                  <select
+                    value={planningWeekIndex}
+                    onChange={(event) => setPlanningWeekIndex(Number(event.target.value) || 1)}
+                    disabled={planningDateScope !== 'semanal'}
+                    className="w-full h-11 bg-surface-container-low border border-outline-variant/20 rounded-xl px-3 text-sm text-on-surface disabled:opacity-60"
+                  >
+                    {planningWeekOptions.map((week: number) => (
+                      <option key={week} value={week}>Semana {week}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-bold uppercase tracking-[0.15em] text-on-surface-variant mb-2">Colaborador</label>
+                  <select
+                    value={planningEmployeeFilter}
+                    onChange={(event) => {
+                      const value = event.target.value;
+                      setPlanningEmployeeFilter(value);
+                      if (value !== 'all') setSelectedScaleEmployeeId(value);
+                    }}
+                    className="w-full h-11 bg-surface-container-low border border-outline-variant/20 rounded-xl px-3 text-sm text-on-surface"
+                  >
+                    <option value="all">Todos</option>
+                    {(employees as Employee[])
+                      .filter((employee) => employee.id !== 'admin')
+                      .sort((a, b) => a.name.localeCompare(b.name))
+                      .map((employee) => (
+                        <option key={employee.id} value={employee.id}>{employee.name}</option>
+                      ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-bold uppercase tracking-[0.15em] text-on-surface-variant mb-2">Turno</label>
+                  <select
+                    value={planningShiftFilter}
+                    onChange={(event) => setPlanningShiftFilter(event.target.value as 'all' | 'manha' | 'tarde' | 'noite' | 'comercial' | 'folga')}
+                    className="w-full h-11 bg-surface-container-low border border-outline-variant/20 rounded-xl px-3 text-sm text-on-surface"
+                  >
+                    <option value="all">Todos</option>
+                    <option value="manha">Manhã</option>
+                    <option value="tarde">Tarde</option>
+                    <option value="noite">Noite</option>
+                    <option value="comercial">Comercial</option>
+                    <option value="folga">Folga/FDS</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-bold uppercase tracking-[0.15em] text-on-surface-variant mb-2">Carga Semanal</label>
+                  <select
+                    value={planningWorkloadFilter}
+                    onChange={(event) => setPlanningWorkloadFilter(event.target.value as 'all' | 'ate36' | '37a44' | '45plus')}
+                    className="w-full h-11 bg-surface-container-low border border-outline-variant/20 rounded-xl px-3 text-sm text-on-surface"
+                  >
+                    <option value="all">Todas</option>
+                    <option value="ate36">Até 36h</option>
+                    <option value="37a44">37h a 44h</option>
+                    <option value="45plus">45h ou mais</option>
+                  </select>
+                </div>
+
+                <div className="flex items-end">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPlanningDateScope('mensal');
+                      setPlanningWeekIndex(1);
+                      setPlanningEmployeeFilter('all');
+                      setPlanningShiftFilter('all');
+                      setPlanningWorkloadFilter('all');
+                    }}
+                    className="w-full h-11 px-4 rounded-xl border border-outline-variant/20 bg-surface-container-low text-xs font-bold uppercase tracking-wider text-on-surface-variant hover:text-primary transition-colors"
+                  >
+                    Limpar Filtros
+                  </button>
+                </div>
+              </div>
             </div>
 
             {showTopAlerts && (
@@ -393,6 +501,7 @@ export function SupervisorPlanejamentoTab(props: SupervisorPlanejamentoTabProps)
                       escalas={selectedScaleCalendar.dias}
                       year={selectedScaleCalendar.year}
                       month={selectedScaleCalendar.month}
+                      dayRange={planningVisibleDayRange}
                       hideMonthBadge
                       isDraggable={isPlanningEditMode}
                       onDayDrop={(from, to, tipo) => {
@@ -468,6 +577,7 @@ export function SupervisorPlanejamentoTab(props: SupervisorPlanejamentoTabProps)
                       escalas={selectedScaleCalendar.dias}
                       year={selectedScaleCalendar.year}
                       month={selectedScaleCalendar.month}
+                      dayRange={planningVisibleDayRange}
                       hideMonthBadge
                       onDayClick={(day) => {
                         const selectedDay = selectedScaleCalendar.dias.find(
@@ -489,6 +599,7 @@ export function SupervisorPlanejamentoTab(props: SupervisorPlanejamentoTabProps)
                     employees={timelineEmployees}
                     appointments={appointments}
                     month={selectedScaleMonth}
+                    dayRange={planningVisibleDayRange}
                     hideMonthBadge
                     isEditable={isPlanningEditMode}
                     suggestedKeys={suggestedPlanningKeys}

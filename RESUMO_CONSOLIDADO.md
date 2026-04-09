@@ -2,17 +2,17 @@
 
 ## 📌 Plano Técnico Imediato (09/04/2026)
 
-Escopo priorizado para fechamento dos itens críticos: BLG-003 (entregue), BLG-004 e BLG-006 (abertos).
+Escopo priorizado para fechamento dos itens críticos: BLG-003 (entregue), BLG-004 (entregue) e BLG-006 (aberto).
 
 | Item | Objetivo técnico | Entregáveis de código | Validação mínima | Status |
 |------|------------------|-----------------------|------------------|--------|
 | BLG-003 | Integrar feriados automaticamente na malha de escalas | Aplicação de feriados no pipeline da malha (com precedência de override manual), atualização de calendário/timeline/dashboard e endpoint backend de feriados | Testes unitários + lint + build + checagem de tipagem | ✅ Entregue |
-| BLG-004 | Entregar filtros avançados de visualização da escala | Filtros combináveis para recorte semanal/mensal, colaborador, turno e faixa de carga; sincronizar calendário/timeline sem regressão de interação | Teste funcional da combinação de filtros + validação de performance perceptiva na timeline | ⏳ Em aberto |
+| BLG-004 | Entregar filtros avançados de visualização da escala | Filtros combináveis para recorte semanal/mensal, colaborador, turno e faixa de carga; sincronizar calendário/timeline sem regressão de interação | Lint + build + validação funcional dos filtros combinados na aba de Planejamento | ✅ Entregue |
 | BLG-006 | Disponibilizar relatórios operacionais e exportação | Relatórios de sobrecarga/gargalos com recortes básicos + exportação CSV e PDF no módulo de planejamento | Geração de relatório consistente com os dados em tela + arquivos CSV/PDF válidos | ⏳ Em aberto |
 
 Sequência recomendada de execução:
 - Dia 1-2: BLG-003 (concluído).
-- Dia 3: BLG-004 (modelo de filtros e estados derivados).
+- Dia 3: BLG-004 (concluído).
 - Dia 4-5: BLG-006 (relatórios e exportação).
 
 Critério de conclusão do pacote:
