@@ -37,11 +37,11 @@ interface TurnoEscala {
 3. **DashboardGestao** - Overview de sobrecarga e gargalos
 
 ### Tipos de Visualização:
-- [ ] Semanal (7 dias)
-- [ ] Mensal (calendário)
-- [ ] Por colaborador
-- [ ] Por turno
-- [ ] Por carga horária
+- Semanal (7 dias) - pendente no BACKLOG_ATIVO.md
+- Mensal (calendário) - pendente no BACKLOG_ATIVO.md
+- Por colaborador - pendente no BACKLOG_ATIVO.md
+- Por turno - pendente no BACKLOG_ATIVO.md
+- Por carga horária - pendente no BACKLOG_ATIVO.md
 
 **Status:** 🟡 Parcialmente implementado (calendário/timeline ativos; filtros avançados seguem em backlog)
 
@@ -86,9 +86,9 @@ Semana 4: Folga
 
 ### Funcionalidades:
 - [x] Bloqueios já funcionam (folgas, férias)
-- [ ] Feriados automáticos (BR)
+- Feriados automáticos (BR) - pendente no BACKLOG_ATIVO.md
 - [x] Cálculo de DSR (Descanso Semanal Remunerado)
-- [ ] Férias automáticas em período permitido
+- Férias automáticas em período permitido - pendente no BACKLOG_ATIVO.md
 
 ### Feriados Nacionais (2026):
 ```
@@ -222,20 +222,20 @@ interface ConfirmidadeCLT {
 ### FASE 2 (Alto)
 - [x] Componente `CalendarioMensal` com cores por tipo de escala
 - [x] Modal de "Solicitar Troca"
-- [ ] Função de Feriados Automáticos (`utils/feriadosBR.ts`)
+- Função de Feriados Automáticos (`utils/feriadosBR.ts`) - pendente no BACKLOG_ATIVO.md
 - [x] Dashboard de Gestão com métricas
 
 ### FASE 3 (Médio)
 - [x] Lógica de rotação automática (12x36, rotativo)
-- [ ] Relatórios detalhados (sobrecarga, gargalos)
+- Relatórios detalhados (sobrecarga, gargalos) - pendente no BACKLOG_ATIVO.md
 - [x] Cálculo automático de DSR
-- [ ] Exportar relatórios (PDF/CSV)
+- Exportar relatórios (PDF/CSV) - pendente no BACKLOG_ATIVO.md
 
 ### FASE 4 (Aprimoramentos)
-- [ ] Integração de calendário externo (Google Calendar)
-- [ ] Notificações por email
-- [ ] App mobile para visualizar escala
-- [ ] Histórico e auditoria de mudanças
+- Integração de calendário externo (Google Calendar) - pendente no BACKLOG_ATIVO.md
+- Notificações por email - pendente no BACKLOG_ATIVO.md
+- App mobile para visualizar escala - pendente no BACKLOG_ATIVO.md
+- Histórico e auditoria de mudanças - pendente no BACKLOG_ATIVO.md
 
 ---
 

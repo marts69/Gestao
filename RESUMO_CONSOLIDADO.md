@@ -4,8 +4,8 @@
 
 Itens reportados e incorporados nesta revisão:
 
-- [ ] Agendamento: mostrar somente quem está de folga (definir regra final de exibição na agenda).
-- [ ] Bloqueio automático/manual para pessoa que está de folga na data.
+- Agendamento: mostrar somente quem está de folga (definir regra final de exibição na agenda). Pendente no BACKLOG_ATIVO.md.
+- Bloqueio automático/manual para pessoa que está de folga na data. Pendente no BACKLOG_ATIVO.md.
 - [x] Supervisor alterar horários de trabalho e manter na listagem operacional.
 - [x] Corrigido: troca de folga com normalização defensiva de override para evitar estado inválido e reinício da UI.
 - [x] Corrigido: sessão ao recarregar página não deve mais voltar para login.
@@ -20,7 +20,7 @@ Pendências ativas foram consolidadas em `BACKLOG_ATIVO.md` para evitar duplicid
 
 Resultado da revisão dos arquivos `.md` do projeto:
 
-- [ ] Padronizar documentação legada para estrutura atual `frontend/` e `backend/` (há referências antigas em guias históricos).
+- Padronizar documentação legada para estrutura atual `frontend/` e `backend/` (há referências antigas em guias históricos). Pendente no BACKLOG_ATIVO.md.
 - [x] Revisar checklists antigos que ainda mostram status "não iniciado" para itens já entregues na fase de split/migração.
 - [x] Consolidar um backlog único para evitar duplicidade entre `RESUMO_CONSOLIDADO.md`, `ESCALA_FEATURES.md` e `IMPLEMENTATION_CHECKLIST.md`.
 
@@ -94,8 +94,8 @@ const { horasTrabalhadas, diasFolga } = calcularHorasEscala(escala);
 Status atualizado em 09/04/2026:
 - [x] FASE 1 (itens 1 a 4) concluída.
 - [x] FASE 2 (itens 5, 7 e 8) concluída.
-- [ ] FASE 2 (item 6: integração automática de feriados na malha) pendente.
-- [ ] FASE 3+ (itens 9 a 12) permanece como backlog evolutivo.
+- FASE 2 (item 6: integração automática de feriados na malha) pendente no BACKLOG_ATIVO.md.
+- FASE 3+ (itens 9 a 12) permanece no BACKLOG_ATIVO.md.
 
 Fonte única de pendências ativas: `BACKLOG_ATIVO.md`.
 
