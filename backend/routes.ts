@@ -1,6 +1,6 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { PrismaClient, Prisma } from '@prisma/client';
-import jwt from 'jsonwebtoken';
+import jwt, { type SignOptions } from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
 import { Server } from 'socket.io';
 import crypto from 'node:crypto';
@@ -10,6 +10,7 @@ import { parseISO, isBefore, format, addMinutes, startOfDay, endOfDay, isValid, 
 
 const prisma = new PrismaClient();
 const JWT_SECRET = 'minha_chave_secreta_super_segura'; // Em produção, use process.env.JWT_SECRET
+const JWT_EXPIRES_IN: SignOptions['expiresIn'] = (process.env.JWT_EXPIRES_IN as SignOptions['expiresIn']) || '2h';
 
 export function createRouter(io: Server) {
   const router = Router();
@@ -403,7 +404,7 @@ export function createRouter(io: Server) {
 
       if (email === 'admin@serenidade.com' && senha === '123456') {
         console.log('[LOGIN] ✅ Supervisor logado com sucesso (Acesso direto).');
-        const token = jwt.sign({ id: 'admin', papel: 'supervisor' }, JWT_SECRET, { expiresIn: '8h' });
+        const token = jwt.sign({ id: 'admin', papel: 'supervisor' }, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN });
         return res.json({
           token,
           usuario: {
@@ -426,7 +427,7 @@ export function createRouter(io: Server) {
       }
 
       console.log(`[LOGIN] ✅ Sucesso: Colaborador(a) ${usuario.nome} entrou.`);
-      const token = jwt.sign({ id: usuario.id, papel: usuario.papel }, JWT_SECRET, { expiresIn: '8h' });
+  const token = jwt.sign({ id: usuario.id, papel: usuario.papel }, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN });
       res.json({ token, usuario });
     } catch (error) {
       console.error('[LOGIN] 🚨 Erro interno crítico:', error);

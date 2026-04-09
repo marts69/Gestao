@@ -160,7 +160,9 @@ const ADMIN_USER: Employee = {
 export default function App() {
   const { currentUser, token, loginError, handleLogin, handleLogout } = useAuth();
   const queryClient = useQueryClient();
+  const [activeRoleView, setActiveRoleView] = useState<'supervisor' | 'collaborator' | 'tv'>(() => currentUser?.role ?? 'collaborator');
   const [isPublicTVMode, setIsPublicTVMode] = useState(false);
+  const shouldLoadSupervisorDatasets = Boolean(token) && currentUser?.role === 'supervisor' && activeRoleView === 'supervisor';
 
   // 1. SUBSTITUIÇÃO DOS ESTADOS MANUAIS PELOS HOOKS DO REACT QUERY
   // Os dados, loading e erros agora são gerenciados automaticamente.
@@ -168,8 +170,8 @@ export default function App() {
   const { data: appointmentsData, isLoading: loadingAppointments, isError: errorAppointments, error: appointmentsError } = useAppointments(token);
   const { data: services, isLoading: loadingServices, isError: errorServices, error: servicesError } = useServices(token);
   const { data: clients, isLoading: loadingClients, isError: errorClients, error: clientsError } = useClients(token);
-  const { data: scaleOverridesData, isLoading: loadingScaleOverrides } = useScaleOverrides(token);
-  const { data: turnoSwapRequestsData, isLoading: loadingTurnoSwaps, isError: errorTurnoSwaps } = useTurnoSwapRequests(token);
+  const { data: scaleOverridesData, isLoading: loadingScaleOverrides } = useScaleOverrides(token, undefined, { enabled: shouldLoadSupervisorDatasets });
+  const { data: turnoSwapRequestsData, isLoading: loadingTurnoSwaps } = useTurnoSwapRequests(token, { enabled: shouldLoadSupervisorDatasets });
 
   // Adicionamos o usuário admin manualmente à lista vinda da API
   const employees = useMemo(() => (employeesData ? [ADMIN_USER, ...employeesData] : [ADMIN_USER]), [employeesData]);
@@ -187,7 +189,6 @@ export default function App() {
     }).length;
   }, [appointments]);
 
-  const [activeRoleView, setActiveRoleView] = useState<'supervisor' | 'collaborator' | 'tv'>('collaborator');
   const [showUpcomingAppointments, setShowUpcomingAppointments] = useState(false);
   const [showAuditorModal, setShowAuditorModal] = useState(false);
 
@@ -454,7 +455,7 @@ export default function App() {
 
   // 3. ESTADOS GLOBAIS DE CARREGAMENTO E ERRO
   // Combina os status para garantir que a interface só renderize com tudo pronto
-  const isGlobalLoading = loadingEmployees || loadingAppointments || loadingServices || loadingClients || loadingTurnoSwaps || loadingScaleOverrides;
+  const isGlobalLoading = loadingEmployees || loadingAppointments || loadingServices || loadingClients || (shouldLoadSupervisorDatasets && (loadingTurnoSwaps || loadingScaleOverrides));
   const criticalErrors = [errorEmployees, errorAppointments, errorServices, errorClients];
   const shouldBlockAppOnError = criticalErrors.every(Boolean);
 

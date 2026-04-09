@@ -1,9 +1,137 @@
-import React, { createContext, useContext, useState, useCallback, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useCallback, useEffect, useRef, ReactNode } from 'react';
 import { Employee } from './types';
 import { getApiUrl } from './config/api';
 
 const TOKEN_STORAGE_KEY = 'spa_token';
 const USER_STORAGE_KEY = 'spa_user';
+const SESSION_STORAGE_KEY = 'spa_session_meta';
+
+const SESSION_MAX_AGE_MS = 2 * 60 * 60 * 1000;
+const SESSION_INACTIVITY_MS = 15 * 60 * 1000;
+const SESSION_CHECK_INTERVAL_MS = 60 * 1000;
+const ACTIVITY_THROTTLE_MS = 15 * 1000;
+
+interface SessionMeta {
+  issuedAt: number;
+  lastActivityAt: number;
+  absoluteExpiresAt: number;
+  inactivityExpiresAt: number;
+  tokenExpiresAt: number | null;
+}
+
+interface InitialAuthState {
+  currentUser: Employee | null;
+  token: string | null;
+}
+
+const clearStoredAuth = () => {
+  localStorage.removeItem(TOKEN_STORAGE_KEY);
+  localStorage.removeItem(USER_STORAGE_KEY);
+  localStorage.removeItem(SESSION_STORAGE_KEY);
+};
+
+const decodeJwtPayload = (token: string): Record<string, unknown> | null => {
+  try {
+    const parts = token.split('.');
+    if (parts.length < 2) return null;
+
+    const payloadBase64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+    const padded = payloadBase64 + '='.repeat((4 - (payloadBase64.length % 4)) % 4);
+    const payload = JSON.parse(atob(padded));
+
+    if (!payload || typeof payload !== 'object') return null;
+    return payload as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+};
+
+const getTokenExpiresAt = (token: string | null): number | null => {
+  if (!token) return null;
+  const payload = decodeJwtPayload(token);
+  const exp = payload?.exp;
+  return typeof exp === 'number' ? exp * 1000 : null;
+};
+
+const parseStoredSessionMeta = (): SessionMeta | null => {
+  try {
+    const raw = localStorage.getItem(SESSION_STORAGE_KEY);
+    if (!raw) return null;
+
+    const parsed = JSON.parse(raw) as Partial<SessionMeta> | null;
+    if (!parsed || typeof parsed !== 'object') return null;
+
+    const issuedAt = Number(parsed.issuedAt);
+    const lastActivityAt = Number(parsed.lastActivityAt);
+    const absoluteExpiresAt = Number(parsed.absoluteExpiresAt);
+    const inactivityExpiresAt = Number(parsed.inactivityExpiresAt);
+    const tokenExpiresAt = parsed.tokenExpiresAt === null || parsed.tokenExpiresAt === undefined
+      ? null
+      : Number(parsed.tokenExpiresAt);
+
+    if (!Number.isFinite(issuedAt) || !Number.isFinite(lastActivityAt)) return null;
+    if (!Number.isFinite(absoluteExpiresAt) || !Number.isFinite(inactivityExpiresAt)) return null;
+    if (tokenExpiresAt !== null && !Number.isFinite(tokenExpiresAt)) return null;
+
+    return {
+      issuedAt,
+      lastActivityAt,
+      absoluteExpiresAt,
+      inactivityExpiresAt,
+      tokenExpiresAt,
+    };
+  } catch {
+    return null;
+  }
+};
+
+const persistSessionMeta = (meta: SessionMeta) => {
+  localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(meta));
+};
+
+const isSessionExpired = (meta: SessionMeta, now: number): boolean => {
+  const absoluteExpired = now >= meta.absoluteExpiresAt;
+  const inactivityExpired = now >= meta.inactivityExpiresAt;
+  const tokenExpired = typeof meta.tokenExpiresAt === 'number' ? now >= meta.tokenExpiresAt : false;
+  return absoluteExpired || inactivityExpired || tokenExpired;
+};
+
+const buildSessionMeta = (token: string, now: number = Date.now()): SessionMeta => {
+  const tokenExpiresAt = getTokenExpiresAt(token);
+  const absoluteCap = now + SESSION_MAX_AGE_MS;
+  const absoluteExpiresAt = typeof tokenExpiresAt === 'number'
+    ? Math.min(absoluteCap, tokenExpiresAt)
+    : absoluteCap;
+
+  const inactivityExpiresAt = Math.min(now + SESSION_INACTIVITY_MS, absoluteExpiresAt);
+
+  return {
+    issuedAt: now,
+    lastActivityAt: now,
+    absoluteExpiresAt,
+    inactivityExpiresAt,
+    tokenExpiresAt,
+  };
+};
+
+const touchSession = (token: string, now: number = Date.now()): boolean => {
+  const currentMeta = parseStoredSessionMeta() ?? buildSessionMeta(token, now);
+
+  if (isSessionExpired(currentMeta, now)) {
+    return false;
+  }
+
+  const tokenLimit = typeof currentMeta.tokenExpiresAt === 'number' ? currentMeta.tokenExpiresAt : Number.POSITIVE_INFINITY;
+  const inactivityExpiresAt = Math.min(now + SESSION_INACTIVITY_MS, currentMeta.absoluteExpiresAt, tokenLimit);
+
+  persistSessionMeta({
+    ...currentMeta,
+    lastActivityAt: now,
+    inactivityExpiresAt,
+  });
+
+  return true;
+};
 
 const parseStoredUser = (): Employee | null => {
   try {
@@ -44,12 +172,8 @@ const decodeUserFromToken = (token: string | null): Employee | null => {
   if (!token) return null;
 
   try {
-    const parts = token.split('.');
-    if (parts.length < 2) return null;
-
-    const payloadBase64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
-    const padded = payloadBase64 + '='.repeat((4 - (payloadBase64.length % 4)) % 4);
-    const payload = JSON.parse(atob(padded));
+    const payload = decodeJwtPayload(token);
+    if (!payload) return null;
 
     const id = payload?.id ? String(payload.id) : '';
     if (!id) return null;
@@ -74,6 +198,44 @@ const decodeUserFromToken = (token: string | null): Employee | null => {
   }
 };
 
+const hydrateInitialAuthState = (): InitialAuthState => {
+  const storedToken = localStorage.getItem(TOKEN_STORAGE_KEY);
+  if (!storedToken) {
+    return { currentUser: null, token: null };
+  }
+
+  const now = Date.now();
+  const tokenExpiresAt = getTokenExpiresAt(storedToken);
+  if (typeof tokenExpiresAt === 'number' && now >= tokenExpiresAt) {
+    clearStoredAuth();
+    return { currentUser: null, token: null };
+  }
+
+  const rebuiltMeta = buildSessionMeta(storedToken, now);
+  const storedMeta = parseStoredSessionMeta();
+  const activeMeta = storedMeta && storedMeta.tokenExpiresAt === rebuiltMeta.tokenExpiresAt
+    ? storedMeta
+    : rebuiltMeta;
+
+  if (isSessionExpired(activeMeta, now)) {
+    clearStoredAuth();
+    return { currentUser: null, token: null };
+  }
+
+  persistSessionMeta(activeMeta);
+
+  const currentUser = parseStoredUser() ?? decodeUserFromToken(storedToken);
+  if (!currentUser) {
+    clearStoredAuth();
+    return { currentUser: null, token: null };
+  }
+
+  return {
+    currentUser,
+    token: storedToken,
+  };
+};
+
 interface AuthContextType {
   currentUser: Employee | null;
   token: string | null;
@@ -85,13 +247,15 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [currentUser, setCurrentUser] = useState<Employee | null>(() => {
-    const storedUser = parseStoredUser();
-    if (storedUser) return storedUser;
-    return decodeUserFromToken(localStorage.getItem(TOKEN_STORAGE_KEY));
-  });
-  const [token, setToken] = useState<string | null>(() => localStorage.getItem(TOKEN_STORAGE_KEY));
+  const initialAuthRef = useRef<InitialAuthState | null>(null);
+  if (initialAuthRef.current === null) {
+    initialAuthRef.current = hydrateInitialAuthState();
+  }
+
+  const [currentUser, setCurrentUser] = useState<Employee | null>(initialAuthRef.current.currentUser);
+  const [token, setToken] = useState<string | null>(initialAuthRef.current.token);
   const [loginError, setLoginError] = useState<string | null>(null);
+  const lastActivityRef = useRef(0);
 
   const handleLogin = useCallback(async (email: string, pass: string) => {
     try {
@@ -107,6 +271,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       
       setToken(data.token);
       localStorage.setItem(TOKEN_STORAGE_KEY, data.token); // Mantém logado ao dar F5
+      persistSessionMeta(buildSessionMeta(data.token));
       
       const loggedUser: Employee = {
         id: String(data.usuario.id),
@@ -133,9 +298,80 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const handleLogout = useCallback(() => {
     setCurrentUser(null);
     setToken(null);
-    localStorage.removeItem(TOKEN_STORAGE_KEY);
-    localStorage.removeItem(USER_STORAGE_KEY);
+    setLoginError(null);
+    clearStoredAuth();
   }, []);
+
+  useEffect(() => {
+    if (!token) return;
+
+    if (!touchSession(token, Date.now())) {
+      handleLogout();
+      return;
+    }
+
+    const checkSessionExpiry = () => {
+      const now = Date.now();
+      const meta = parseStoredSessionMeta();
+
+      if (!meta) {
+        persistSessionMeta(buildSessionMeta(token, now));
+        return;
+      }
+
+      if (isSessionExpired(meta, now)) {
+        handleLogout();
+      }
+    };
+
+    const registerActivity = () => {
+      const now = Date.now();
+      if (now - lastActivityRef.current < ACTIVITY_THROTTLE_MS) return;
+
+      lastActivityRef.current = now;
+      touchSession(token, now);
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        checkSessionExpiry();
+        registerActivity();
+      }
+    };
+
+    const handleStorageChange = (event: StorageEvent) => {
+      if (event.key === TOKEN_STORAGE_KEY && !event.newValue) {
+        handleLogout();
+        return;
+      }
+
+      if (event.key === TOKEN_STORAGE_KEY || event.key === SESSION_STORAGE_KEY) {
+        checkSessionExpiry();
+      }
+    };
+
+    const activityEvents: Array<keyof WindowEventMap> = ['click', 'keydown', 'touchstart'];
+    for (const eventName of activityEvents) {
+      window.addEventListener(eventName, registerActivity, { passive: true });
+    }
+
+    window.addEventListener('focus', registerActivity);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('storage', handleStorageChange);
+
+    const interval = window.setInterval(checkSessionExpiry, SESSION_CHECK_INTERVAL_MS);
+
+    return () => {
+      for (const eventName of activityEvents) {
+        window.removeEventListener(eventName, registerActivity);
+      }
+
+      window.removeEventListener('focus', registerActivity);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('storage', handleStorageChange);
+      window.clearInterval(interval);
+    };
+  }, [token, handleLogout]);
 
   return (
     <AuthContext.Provider value={{ currentUser, token, loginError, handleLogin, handleLogout }}>

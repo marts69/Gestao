@@ -261,6 +261,7 @@ type EditEmployeePayload = Partial<Employee> & { id: string };
 type NewServicePayload = Omit<Service, 'id'>;
 type NewBloqueioPayload = Omit<Bloqueio, 'id'>;
 type NewTurnoSwapPayload = Omit<TurnoSwapRequest, 'id' | 'criadoEm' | 'atualizadoEm' | 'colaboradorNome'>;
+type QueryHookOptions = { enabled?: boolean };
 
 export type ScaleDayType = 'trabalho' | 'folga' | 'fds';
 
@@ -440,7 +441,7 @@ export const useEditEmployee = (token: string | null) => {
 // =======================
 // TROCAS DE TURNO
 // =======================
-export const useTurnoSwapRequests = (token: string | null) => useQuery({
+export const useTurnoSwapRequests = (token: string | null, options?: QueryHookOptions) => useQuery({
   queryKey: ['turno-swaps'],
   queryFn: async () => {
     try {
@@ -454,7 +455,7 @@ export const useTurnoSwapRequests = (token: string | null) => useQuery({
       throw error;
     }
   },
-  enabled: !!token,
+  enabled: !!token && (options?.enabled ?? true),
 });
 
 export const useAddTurnoSwapRequest = (token: string | null) => {
@@ -486,7 +487,8 @@ export const useUpdateTurnoSwapRequestStatus = (token: string | null) => {
 // =======================
 export const useScaleOverrides = (
   token: string | null,
-  params?: { month?: string; colaboradorId?: string }
+  params?: { month?: string; colaboradorId?: string },
+  options?: QueryHookOptions,
 ) => useQuery({
   queryKey: ['scale-overrides', params?.month || 'all', params?.colaboradorId || 'all'],
   queryFn: async () => {
@@ -501,7 +503,7 @@ export const useScaleOverrides = (
       .map((item) => normalizeScaleOverridePayload(item))
       .filter((item): item is ScaleOverridePayload => Boolean(item));
   },
-  enabled: !!token,
+  enabled: !!token && (options?.enabled ?? true),
 });
 
 export const useSaveScaleOverride = (token: string | null) => {
