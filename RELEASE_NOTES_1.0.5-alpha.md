@@ -1,7 +1,7 @@
 # Release Notes Consolidadas
 
 ## Versao 1.0.5-alpha
-- Commit: a definir
+- Commit: 33a70e4e4f9f5b4e7f5eb3379f5fdcb31f54f8fa
 - Escopo: estabilizacao de compilacao, alinhamento de tipagem e bump de versao.
 
 ### Adicionado
