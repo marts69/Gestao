@@ -351,13 +351,13 @@ import { parseClientObservation, formatAnamneseStorage, getAnamneseSummary } fro
 - [x] Atualizar CollaboratorView.tsx
 - [x] Atualizar BookingModal.tsx
 - [x] Atualizar SupervisorClientesTab.tsx
-- [ ] Rodar: `npm run build`
-- [ ] Rodar: `npm run lint` (se existir)
-- [ ] Testar manualmente:
-  - [ ] Login funciona
-  - [ ] Agenda exibe corretamente
-  - [ ] Modal de booking abre
-  - [ ] Cliente history funciona
+- [x] Rodar: `npm run build`
+- [x] Rodar: `npm run lint` (se existir)
+- [x] Testar manualmente:
+  - [x] Login funciona
+  - [x] Agenda exibe corretamente
+  - [x] Modal de booking abre
+  - [x] Cliente history funciona
 
 ---
 

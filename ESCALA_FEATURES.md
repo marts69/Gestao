@@ -25,7 +25,7 @@ interface TurnoEscala {
 }
 ```
 
-**Status:** ⏳ Pendente - Necessário atualizar types.ts
+**Status:** ✅ Parcialmente implementado (tipos e campos operacionais já aplicados no fluxo atual)
 
 ---
 
@@ -43,7 +43,7 @@ interface TurnoEscala {
 - [ ] Por turno
 - [ ] Por carga horária
 
-**Status:** ⏳ A Implementar
+**Status:** 🟡 Parcialmente implementado (calendário/timeline ativos; filtros avançados seguem em backlog)
 
 ---
 
@@ -78,7 +78,7 @@ Semana 3: Turno 3 (23:00-07:00)
 Semana 4: Folga
 ```
 
-**Status:** ⏳ A Implementar - Lógica de Rotação
+**Status:** ✅ Implementado na base de cálculo de escalas
 
 ---
 
@@ -87,7 +87,7 @@ Semana 4: Folga
 ### Funcionalidades:
 - [x] Bloqueios já funcionam (folgas, férias)
 - [ ] Feriados automáticos (BR)
-- [ ] Cálculo de DSR (Descanso Semanal Remunerado)
+- [x] Cálculo de DSR (Descanso Semanal Remunerado)
 - [ ] Férias automáticas em período permitido
 
 ### Feriados Nacionais (2026):
@@ -108,7 +108,7 @@ Semana 4: Folga
 25/12 - Natal
 ```
 
-**Status:** ⏳ A Implementar - Função de Feriados
+**Status:** 🟡 Parcialmente implementado (utilitário de feriados criado; integração automática na malha ainda pendente)
 
 ---
 
@@ -134,7 +134,7 @@ interface TrocaTurno {
 3. Supervisor aprova/recusa
 4. Notificação para ambos
 
-**Status:** ⏳ A Implementar - Modal de Troca
+**Status:** ✅ Implementado (solicitação + aprovação/rejeição)
 
 ---
 
@@ -176,7 +176,7 @@ interface ConfirmidadeCLT {
 }
 ```
 
-**Status:** ⏳ A Implementar - Validador CLT
+**Status:** ✅ Implementado (interjornada, DSR e integração com sino global)
 
 ---
 
@@ -207,28 +207,28 @@ interface ConfirmidadeCLT {
 - Conformidade CLT pessoal
 - Histórico de trocas
 
-**Status:** ⏳ A Implementar - Componentes de Relatórios
+**Status:** 🟡 Parcialmente implementado (dashboard de conformidade disponível; relatórios avançados seguem em backlog)
 
 ---
 
 ## 📋 Plano de Implementação por Prioridade
 
 ### FASE 1 (Crítico)
-- [ ] Atualizar tipos em `types.ts`
-- [ ] Expandir formulário de colaborador em `SupervisorEquipeTab`
-- [ ] Criar validador CLT básico (`utils/cltValidator.ts`)
-- [ ] Mostrar alertas de conformidade na UI
+- [x] Atualizar tipos em `types.ts`
+- [x] Expandir formulário de colaborador em `SupervisorEquipeTab`
+- [x] Criar validador CLT básico (`utils/cltValidator.ts`)
+- [x] Mostrar alertas de conformidade na UI
 
 ### FASE 2 (Alto)
-- [ ] Componente `CalendarioMensal` com cores por tipo de escala
-- [ ] Modal de "Solicitar Troca"
+- [x] Componente `CalendarioMensal` com cores por tipo de escala
+- [x] Modal de "Solicitar Troca"
 - [ ] Função de Feriados Automáticos (`utils/feriadosBR.ts`)
-- [ ] Dashboard de Gestão com métricas
+- [x] Dashboard de Gestão com métricas
 
 ### FASE 3 (Médio)
-- [ ] Lógica de rotação automática (12x36, rotativo)
+- [x] Lógica de rotação automática (12x36, rotativo)
 - [ ] Relatórios detalhados (sobrecarga, gargalos)
-- [ ] Cálculo automático de DSR
+- [x] Cálculo automático de DSR
 - [ ] Exportar relatórios (PDF/CSV)
 
 ### FASE 4 (Aprimoramentos)

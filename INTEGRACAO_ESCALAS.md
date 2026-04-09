@@ -335,9 +335,13 @@ export function DashboardEscalas({ employees, appointments }) {
 
 ### Passo operacional pendente
 
-- [ ] Aplicar migração Prisma no ambiente alvo para materializar a tabela/colunas novas:
+- [x] Aplicar migração Prisma no ambiente alvo para materializar a tabela/colunas novas:
 
 ```bash
 npx prisma migrate deploy
 npx prisma generate
 ```
+
+Evidência 09/04/2026:
+- `migrate deploy` executado sem pendências.
+- `generate` executado com sucesso (Prisma Client atualizado).

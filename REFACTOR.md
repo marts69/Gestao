@@ -514,7 +514,7 @@ Manutenibilidade: 60% → ~84% (em progresso para 95%)
 - [x] `npm run lint`
 - [x] `node ./node_modules/typescript/bin/tsc --noEmit -p tsconfig.json`
 - [x] `npm --prefix frontend run build`
-- [ ] Smoke manual: criar serviço com higienização e confirmar bloqueio real no agendamento.
+- [x] Smoke manual: criar serviço com higienização e confirmar bloqueio real no agendamento.
 
 ### Tickets de Execução (Amanhã - 08/04/2026)
 
@@ -549,9 +549,9 @@ Manutenibilidade: 60% → ~84% (em progresso para 95%)
   4. Executar smoke manual: cadastrar serviço com higienização e validar bloqueio total na agenda.
 
 #### Ordem recomendada de execução (amanhã)
-- [ ] Manhã: `P0.1` -> `P0.2` -> início de `P0.3`.
-- [ ] Tarde: finalizar `P0.3` -> `P0.4` -> `P0.5`.
-- [ ] Publicar versão alpha no fim do dia com resumo `adicionado` e `corrigido`.
+- [x] Manhã: `P0.1` -> `P0.2` -> início de `P0.3`.
+- [x] Tarde: finalizar `P0.3` -> `P0.4` -> `P0.5`.
+- [x] Publicar versão alpha no fim do dia com resumo `adicionado` e `corrigido`.
 
 ### Riscos e Mitigações por Ticket (P0)
 

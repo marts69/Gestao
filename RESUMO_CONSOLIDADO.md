@@ -6,23 +6,23 @@ Itens reportados e incorporados nesta revisão:
 
 - [ ] Agendamento: mostrar somente quem está de folga (definir regra final de exibição na agenda).
 - [ ] Bloqueio automático/manual para pessoa que está de folga na data.
-- [ ] Supervisor alterar horários de trabalho e manter na listagem operacional.
+- [x] Supervisor alterar horários de trabalho e manter na listagem operacional.
 - [x] Corrigido: troca de folga com normalização defensiva de override para evitar estado inválido e reinício da UI.
 - [x] Corrigido: sessão ao recarregar página não deve mais voltar para login.
 - [x] Entregue: função de Clientes disponível dentro do Portal do Supervisor.
 - [x] Ajustado texto de interface: "Portal da Supervisão" para "Portal do Supervisor".
 
 Observação:
-Os três itens marcados como concluídos acima já foram aplicados no frontend.
-Os demais itens permanecem no backlog funcional para implementação da próxima etapa.
+Itens concluídos nesta revisão foram mantidos como evidência histórica.
+Pendências ativas foram consolidadas em `BACKLOG_ATIVO.md` para evitar duplicidade entre documentos.
 
 ## 🧾 Auditoria de Markdown (07/04/2026)
 
 Resultado da revisão dos arquivos `.md` do projeto:
 
 - [ ] Padronizar documentação legada para estrutura atual `frontend/` e `backend/` (há referências antigas em guias históricos).
-- [ ] Revisar checklists antigos que ainda mostram status "não iniciado" para itens já entregues na fase de split/migração.
-- [ ] Consolidar um backlog único para evitar duplicidade entre `RESUMO_CONSOLIDADO.md`, `ESCALA_FEATURES.md` e `IMPLEMENTATION_CHECKLIST.md`.
+- [x] Revisar checklists antigos que ainda mostram status "não iniciado" para itens já entregues na fase de split/migração.
+- [x] Consolidar um backlog único para evitar duplicidade entre `RESUMO_CONSOLIDADO.md`, `ESCALA_FEATURES.md` e `IMPLEMENTATION_CHECKLIST.md`.
 
 ## 🎯 O Que Foi Entregue
 
@@ -65,11 +65,13 @@ if (ehFeriado('2026-04-21')) {
 ### 2. Validar Conformidade CLT
 ```typescript
 import { analisarConformidadeCLT } from '@/utils/cltValidator';
+import { gerarEscala } from '@/utils/escalaCalculator';
 
-const analise = analisarConformidadeCLT(appointments, bloqueios, today);
+const escala = gerarEscala({ tipo: '6x1', dataInicio: '2026-04-01' }, 30);
+const analise = analisarConformidadeCLT(escala);
 
 if (!analise.statusGeral) {
-  showError(`⚠️ ${analise.resumo.join('\n')}`);
+  showError(`⚠️ ${analise.resumo.join(' | ')}`);
 }
 ```
 
@@ -89,45 +91,13 @@ const { horasTrabalhadas, diasFolga } = calcularHorasEscala(escala);
 
 ## 📋 Próximas Etapas (ORDENADAS)
 
-### FASE 1: Critical (1h 50min)
-```
-[ ] 1. Atualizar types.ts com:
-       - TipoEscala = '6x1' | '5x2' | '12x36' | 'rotativo'
-       - TrocaTurno interface
-       - ConfirmidadeCLT interface
-       - Expandir Employee com: cargo, telefone, cpf, habilidades, etc
+Status atualizado em 09/04/2026:
+- [x] FASE 1 (itens 1 a 4) concluída.
+- [x] FASE 2 (itens 5, 7 e 8) concluída.
+- [ ] FASE 2 (item 6: integração automática de feriados na malha) pendente.
+- [ ] FASE 3+ (itens 9 a 12) permanece como backlog evolutivo.
 
-[ ] 2. Expandir SupervisorEquipeTab:
-       - Adicionar campos: cargo, tipoEscala, cargaHoraria, habilidades
-       - Mostrar badge CLT: ✅/⚠️/❌
-
-[ ] 3. Integrar alertas CLT:
-       - Chamar analisarConformidadeCLT em cada card de colaborador
-       - Exibir resumo em card vermelho se houver violação
-
-[ ] 4. Criar aba "Escalas":
-       - Dropdown de colaborador
-       - Dropdown de tipo de escala
-       - Botão "Gerar"
-       - Calendário visual com DiaEscala[]
-       - Estatísticas (dias, horas, utilização%)
-```
-
-### FASE 2: High Priority (1h 35min)
-```
-[ ] 5. Criar Modal "SolicitarTroca"
-[ ] 6. Integrar feriados automaticamente em escalas
-[ ] 7. Dashboard de Conformidade CLT
-[ ] 8. Mostrar trocas pendentes em aprovação
-```
-
-### FASE 3+: Medium/Nice-to-Have
-```
-[ ] 9. Auto-rotação inteligente com ML
-[ ] 10. Relatórios PDF/CSV
-[ ] 11. Google Calendar sync
-[ ] 12. Notificações por e-mail
-```
+Fonte única de pendências ativas: `BACKLOG_ATIVO.md`.
 
 ---
 
