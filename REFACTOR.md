@@ -542,7 +542,7 @@ Manutenibilidade: 60% → ~84% (em progresso para 95%)
   3. Revisar mensagens de conflito para refletir tempo operacional real.
   4. Arquivos alvo: `frontend/src/features/appointments/utils/appointmentCore.ts`, `backend/routes.ts`.
 
-- [ ] **P0.5 - QA técnico e smoke de operação (1h a 1.5h)**
+- [x] **P0.5 - QA técnico e smoke de operação (1h a 1.5h)**
   1. Rodar `npm run lint`.
   2. Rodar `node ./node_modules/typescript/bin/tsc --noEmit -p tsconfig.json`.
   3. Rodar `npm --prefix frontend run build`.
@@ -587,10 +587,27 @@ Manutenibilidade: 60% → ~84% (em progresso para 95%)
 
 ### Checklist de Mitigação (go/no-go do dia)
 - [x] Confirmar fallback de dados legados ativo antes do deploy local.
-- [ ] Confirmar migration validada em base de teste com snapshot.
+- [x] Confirmar migration validada em base de teste com snapshot.
 - [x] Confirmar cálculo de duração total idêntico entre frontend/backend.
-- [ ] Confirmar smoke com cenários de erro e borda, não apenas fluxo feliz.
-- [ ] Confirmar estratégia de rollback pronta antes do push final.
+- [x] Confirmar smoke com cenários de erro e borda, não apenas fluxo feliz.
+- [x] Confirmar estratégia de rollback pronta antes do push final.
+
+#### Evidência operacional 09/04/2026 (fechamento go/no-go)
+- Migration validada em base de teste dedicada com snapshot:
+  1. Banco temporário criado e migrado com `migrate deploy` (`postgres_migcheck_093958`).
+  2. Snapshot SQL gerado em `generated/migration_snapshots/2026-04-09_p0_services_migration_snapshot.sql`.
+  3. Banco temporário removido ao final da validação.
+- Migração aplicada no banco principal local e status sincronizado (`Database schema is up to date`).
+- Smoke orientado a erro e borda executado em API local com limpeza dos dados de teste:
+  1. Limite inválido `07:45` -> `400`.
+  2. Arredondamento inválido `10:10` -> `400`.
+  3. Criação válida `11:00` -> `201`.
+  4. Segunda criação no mesmo slot -> `409`.
+  5. Limpeza pós-teste -> `DELETE` do agendamento de smoke com `200`.
+- Estratégia de rollback pronta (pré-definida):
+  1. **Aplicação**: `git revert 0004556 756bb82 7f50f53` (ordem inversa de dependência), seguido de `git push`.
+  2. **Banco**: manter colunas novas como compatíveis (rollback não-destrutivo), e em cenário crítico usar script controlado de backfill para defaults (`descricao=''`, `categoria=''`, `tempoHigienizacaoMin=0`, `comissaoPercentual=NULL`).
+  3. **Operação**: validar pós-reversão com `npm run lint`, `node ./node_modules/typescript/bin/tsc --noEmit -p tsconfig.json`, `npm --prefix frontend run build` e reexecutar smoke API de conflito/limites.
 
 ---
 
