@@ -347,7 +347,7 @@ export function SupervisorServicosTab({
           </div>
           <div>
             <label className="block text-[10px] font-bold text-on-surface-variant tracking-[0.15em] uppercase mb-2">Detalhes / Produtos Utilizados (Opcional)</label>
-            <textarea value={newServiceDescription} onChange={e => setNewServiceDescription(e.target.value)} className="w-full bg-surface-container-lowest border border-outline-variant/20 rounded-xl p-3 focus:ring-1 focus:ring-primary text-sm transition-all resize-none min-h-[80px]" placeholder="Ex: Utiliza óleos essenciais relaxantes, pedras aquecidas e toalhas quentes..." />
+            <textarea value={newServiceDescription} onChange={e => setNewServiceDescription(e.target.value)} className="w-full bg-surface-container-lowest border border-outline-variant/20 rounded-xl p-3 focus:ring-1 focus:ring-primary text-sm transition-all resize-none min-h-20" placeholder="Ex: Utiliza óleos essenciais relaxantes, pedras aquecidas e toalhas quentes..." />
           </div>
           <button type="submit" className="w-full mt-4 bg-primary text-on-primary py-3 rounded-xl font-bold text-xs uppercase tracking-[0.2em] shadow-sm hover:bg-primary-dim transition-all active:scale-[0.98]">{editingServiceId ? 'Salvar Alterações' : 'Salvar Serviço'}</button>
         </form>

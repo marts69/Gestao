@@ -948,6 +948,19 @@ Com a estabilização completa da operação (Agenda, Escalas, RH e Serviços Pr
 - Bump de versao aplicado para `1.0.5-alpha` em root/frontend/backend.
 - Status atual: sem erro critico de compilacao no ciclo de validacao desta release.
 
+### Atualizacao 09/04/2026 (hardening de sessao e bootstrap sob demanda)
+- Sessao endurecida no frontend (`AuthContext`):
+  1. timeout por inatividade reduzido para 15 minutos.
+  2. tempo maximo de sessao reduzido para 2 horas.
+  3. logout automatico por expiracao com validacao recorrente e sincronizacao entre abas.
+- Token JWT no backend com expiracao padrao reduzida para 2 horas (`JWT_EXPIRES_IN`, configuravel por variavel de ambiente).
+- Bootstrap inicial otimizado no app: datasets pesados de supervisao (trocas de turno e overrides de escala) passaram a carregar sob demanda, apenas em contexto de supervisor ativo.
+- Validacao tecnica da rodada:
+  1. `npm run lint`
+  2. `node node_modules/typescript/bin/tsc --noEmit -p tsconfig.json`
+  3. `npm --prefix frontend run build`
+- Commit de referencia: `7f50f53`.
+
 ---
 
 ## 📞 Dúvidas?
